@@ -8,7 +8,7 @@ const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [serverStatus, setServerStatus] = useState(null);
+  const [serverStatus, setServerStatus] = useState({ api: false, humanizer: false });
   
   // Humanizer functionality
   const [originalText, setOriginalText] = useState('');
@@ -34,6 +34,8 @@ const Dashboard = () => {
         const apiAvailable = await isApiAvailable();
         const humanizerAvailable = await isHumanizerAvailable();
         
+        console.log("Server status:", { api: apiAvailable, humanizer: humanizerAvailable });
+        
         setServerStatus({
           api: apiAvailable,
           humanizer: humanizerAvailable
@@ -48,6 +50,11 @@ const Dashboard = () => {
     };
     
     checkServerStatus();
+    
+    // Check server status periodically
+    const statusInterval = setInterval(checkServerStatus, 30000); // Every 30 seconds
+    
+    return () => clearInterval(statusInterval);
   }, [navigate]);
 
   const handleLogout = () => {
@@ -79,6 +86,13 @@ const Dashboard = () => {
     } catch (err) {
       console.error('Humanization error:', err);
       setHumanizeError('Server Error: Unable to humanize text. The server may be offline.');
+      
+      // Update server status after an error
+      const humanizerAvailable = await isHumanizerAvailable();
+      setServerStatus(prev => ({
+        ...prev,
+        humanizer: humanizerAvailable
+      }));
     } finally {
       setProcessingText(false);
     }
@@ -109,9 +123,11 @@ const Dashboard = () => {
 
       {error && <div className="error-message">{error}</div>}
       
-      {serverStatus && !serverStatus.humanizer && (
+      {!serverStatus.humanizer && (
         <div className="server-status-alert">
-          ⚠️ Humanizer service is unavailable. The text processing may not work correctly.
+          <strong>⚠️ Humanizer service is currently offline.</strong>
+          <p>The text humanizing feature is not available. This could be due to scheduled maintenance or a temporary service disruption.</p>
+          <p>Please try again later or contact support if the problem persists.</p>
         </div>
       )}
       
@@ -128,7 +144,13 @@ const Dashboard = () => {
         </div>
         
         {/* Humanizer Card - MAIN FEATURE */}
-        <div className="card humanizer-card">
+        <div className={`card humanizer-card ${!serverStatus.humanizer ? 'disabled-card' : ''}`}>
+          <div className="card-status">
+            <span className={serverStatus.humanizer ? 'status-online' : 'status-offline'}>
+              {serverStatus.humanizer ? '● Online' : '● Offline'}
+            </span>
+          </div>
+          
           <h2>Text Humanizer</h2>
           <p>Transform AI-generated content into human-like text.</p>
           
@@ -141,7 +163,7 @@ const Dashboard = () => {
                 onChange={handleInputChange}
                 placeholder="Enter text to humanize..."
                 rows={8}
-                disabled={processingText}
+                disabled={processingText || !serverStatus.humanizer}
                 className="humanize-textarea"
               />
             </div>
@@ -151,10 +173,16 @@ const Dashboard = () => {
             <button 
               type="submit" 
               className="primary-button humanize-button"
-              disabled={processingText || !originalText}
+              disabled={processingText || !originalText || !serverStatus.humanizer}
             >
               {processingText ? 'Processing...' : 'Humanize Text'}
             </button>
+            
+            {!serverStatus.humanizer && (
+              <p className="offline-message">
+                This feature is currently unavailable because the humanizer service is offline.
+              </p>
+            )}
           </form>
 
           {humanizedText && (
