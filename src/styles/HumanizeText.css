@@ -25,6 +25,80 @@
   margin-bottom: 25px;
 }
 
+/* Service Status Bar */
+.service-status-bar {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.service-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.service-indicator::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.service-indicator.available {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.service-indicator.available::before {
+  background-color: #4caf50;
+}
+
+.service-indicator.unavailable, 
+.service-indicator.error {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.service-indicator.unavailable::before,
+.service-indicator.error::before {
+  background-color: #f44336;
+}
+
+.service-indicator.checking {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.service-indicator.checking::before {
+  background-color: #2196f3;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+.warning-message {
+  padding: 12px;
+  margin-bottom: 20px;
+  background-color: #fff8e1;
+  color: #ff8f00;
+  border-radius: 5px;
+  border-left: 4px solid #ff8f00;
+  text-align: center;
+  animation: fadeIn 0.5s;
+}
+
 .form-group {
   margin-bottom: 20px;
 }
@@ -261,5 +335,15 @@ textarea:focus {
   
   .action-button {
     width: 100%;
+  }
+  
+  .service-status-bar {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .service-indicator {
+    width: 80%;
+    justify-content: center;
   }
 }
