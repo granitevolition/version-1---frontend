@@ -40,6 +40,13 @@ input:focus {
   box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
 }
 
+.help-text {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
 .submit-button {
   width: 100%;
   padding: 0.75rem;
@@ -68,6 +75,7 @@ input:focus {
   padding: 0.75rem;
   border-radius: 4px;
   margin-bottom: 1rem;
+  animation: fadeIn 0.3s ease-in;
 }
 
 .error-message {
@@ -76,4 +84,35 @@ input:focus {
   padding: 0.75rem;
   border-radius: 4px;
   margin-bottom: 1rem;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.debug-info {
+  margin-top: 20px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  overflow-x: auto;
+}
+
+.debug-info h3 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.debug-info pre {
+  margin: 0;
+  white-space: pre-wrap;
 }
