@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { getCurrentUser, isLoggedIn, logoutUser, verifySession } from '../services/api';
 import '../styles/Dashboard.css';
 
@@ -150,20 +150,36 @@ const Dashboard = () => {
 
         <div className="dashboard-panels">
           <div className="panel">
-            <h3>Quick Access</h3>
+            <h3>AI Text Tools</h3>
             <div className="panel-content">
-              <p>This is your personalized dashboard. More features coming soon!</p>
+              <p>Access our powerful AI text tools to enhance your content:</p>
               <div className="action-buttons">
-                <button className="action-button">Update Profile</button>
-                <button className="action-button">Security Settings</button>
+                <Link to="/humanize" className="feature-button">
+                  <i className="feature-icon">✨</i>
+                  <div className="feature-details">
+                    <span className="feature-name">Humanize Text</span>
+                    <span className="feature-description">Make AI-generated text sound more human</span>
+                  </div>
+                </Link>
+                <Link to="/detect" className="feature-button">
+                  <i className="feature-icon">🔍</i>
+                  <div className="feature-details">
+                    <span className="feature-name">AI Detector</span>
+                    <span className="feature-description">Check if text will be flagged as AI-generated</span>
+                  </div>
+                </Link>
               </div>
             </div>
           </div>
 
           <div className="panel">
-            <h3>Recent Activity</h3>
+            <h3>Account Settings</h3>
             <div className="panel-content">
-              <p>No recent activity to display.</p>
+              <p>Manage your account settings and preferences:</p>
+              <div className="action-buttons">
+                <button className="action-button">Update Profile</button>
+                <button className="action-button">Security Settings</button>
+              </div>
             </div>
           </div>
         </div>
