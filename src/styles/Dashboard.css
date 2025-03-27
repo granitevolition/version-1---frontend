@@ -39,6 +39,17 @@ body {
   background-color: #e53935;
 }
 
+/* Server status alert */
+.server-status-alert {
+  background-color: #fff3cd;
+  color: #856404;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border-left: 5px solid #ffc107;
+  font-weight: 500;
+}
+
 /* Card styles */
 .content-area {
   display: flex;
@@ -66,6 +77,30 @@ body {
   color: #666;
 }
 
+/* Humanizer card - highlighted */
+.humanizer-card {
+  border: 1px solid #e3f2fd;
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.15);
+  position: relative;
+  overflow: visible;
+}
+
+.humanizer-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  background-color: #2196f3;
+  border-radius: 5px 5px 0 0;
+}
+
+.humanizer-card h2 {
+  color: #1976d2;
+  font-size: 22px;
+}
+
 /* Form styles */
 .form-group {
   margin-bottom: 16px;
@@ -85,6 +120,24 @@ body {
   font-size: 14px;
   resize: vertical;
   font-family: inherit;
+}
+
+/* Enhanced textarea for humanizer */
+.humanize-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 15px;
+  border: 2px solid #bbdefb;
+  border-radius: 6px;
+  font-size: 15px;
+  transition: border 0.3s ease;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.humanize-textarea:focus {
+  border-color: #2196f3;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.25);
 }
 
 .primary-button {
@@ -107,6 +160,21 @@ body {
   cursor: not-allowed;
 }
 
+/* Enhanced humanize button */
+.humanize-button {
+  padding: 12px 24px;
+  font-size: 16px;
+  background-color: #1976d2;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.humanize-button:hover:not(:disabled) {
+  background-color: #1565c0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
 .secondary-button {
   background-color: #f0f0f0;
   color: #333;
@@ -124,7 +192,7 @@ body {
 /* Result box */
 .result-box {
   margin-top: 20px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid #e3f2fd;
   padding-top: 20px;
 }
 
@@ -132,11 +200,12 @@ body {
   margin-top: 0;
   margin-bottom: 12px;
   font-size: 18px;
+  color: #1976d2;
 }
 
 .result-text {
   background-color: #f9f9f9;
-  border: 1px solid #eee;
+  border: 1px solid #e0e0e0;
   border-radius: 4px;
   padding: 16px;
   margin-bottom: 16px;
@@ -147,6 +216,17 @@ body {
 .result-text p {
   margin: 0;
   white-space: pre-wrap;
+}
+
+/* Tips list */
+.tips-list {
+  padding-left: 20px;
+  margin-top: 0;
+}
+
+.tips-list li {
+  margin-bottom: 8px;
+  color: #555;
 }
 
 /* Message styles */
