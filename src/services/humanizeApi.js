@@ -41,6 +41,8 @@ export const humanizeText = async (text, aiScore = null) => {
         text,
         aiScore
       }),
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(30000)
     });
 
     // Handle unsuccessful responses
@@ -67,11 +69,27 @@ export const humanizeText = async (text, aiScore = null) => {
     // Return the humanized text
     return {
       originalText: text,
-      humanizedText: data.humanized || data.result || data.humanized_text,
+      humanizedText: data.humanized || data.result || data.humanized_text || text,
       message: 'Text successfully humanized!'
     };
   } catch (error) {
     console.error('Humanization error:', error);
+    
+    // Provide more specific error messages
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try a shorter text or try again later.');
+    }
+    
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Network error: Unable to connect to the humanization service. Please check your internet connection and try again.');
+    }
+    
+    // Look for specific error codes to give better messages
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      throw new Error('Network error: The server appears to be offline. Please try again later.');
+    }
+    
+    // Use original error if we don't have a more specific message
     throw error;
   }
 };
@@ -114,6 +132,12 @@ export const detectAiContent = async (text) => {
     };
   } catch (error) {
     console.error('AI detection error:', error);
+    
+    // Provide clear error message
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Network error: Unable to connect to the detection service. Please check your internet connection and try again.');
+    }
+    
     throw error;
   }
 };
@@ -136,7 +160,9 @@ export const getHumanizeStats = async () => {
     
     const response = await fetch(`${API_BASE_URL}/humanize/stats`, {
       method: 'GET',
-      headers
+      headers,
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(10000)
     });
     
     if (!response.ok) {
@@ -158,6 +184,16 @@ export const getHumanizeStats = async () => {
     return data;
   } catch (error) {
     console.error('Error getting humanize stats:', error);
+    
+    // Provide more specific error messages
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again later.');
+    }
+    
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Network error: Unable to connect to the server. Please check your internet connection and try again.');
+    }
+    
     throw error;
   }
 };
@@ -182,7 +218,9 @@ export const getHumanizeHistory = async (page = 1, limit = 10) => {
     
     const response = await fetch(`${API_BASE_URL}/humanize/history?page=${page}&limit=${limit}`, {
       method: 'GET',
-      headers
+      headers,
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(10000)
     });
     
     if (!response.ok) {
@@ -204,7 +242,40 @@ export const getHumanizeHistory = async (page = 1, limit = 10) => {
     return data;
   } catch (error) {
     console.error('Error getting humanize history:', error);
+    
+    // Provide more specific error messages
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again later.');
+    }
+    
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Network error: Unable to connect to the server. Please check your internet connection and try again.');
+    }
+    
     throw error;
+  }
+};
+
+/**
+ * Check if the humanizer service is available
+ * @returns {Promise<boolean>} - True if available, false otherwise
+ */
+export const isHumanizerAvailable = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/humanize/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (!response.ok) {
+      return false;
+    }
+    
+    const data = await response.json();
+    return data.status === 'healthy' || data.status === 'degraded';
+  } catch (error) {
+    console.error('Humanizer health check failed:', error);
+    return false;
   }
 };
 
