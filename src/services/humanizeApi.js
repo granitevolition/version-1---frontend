@@ -9,9 +9,15 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://version-1-backend
 // The direct humanizer API URL - include the full path with endpoint
 const DIRECT_HUMANIZER_API_URL = process.env.REACT_APP_HUMANIZER_API_URL || 'https://web-production-3db6c.up.railway.app/humanize_text';
 
+// Extract the base URL (without the /humanize_text endpoint)
+const HUMANIZER_BASE_URL = DIRECT_HUMANIZER_API_URL.includes('/humanize_text') 
+  ? DIRECT_HUMANIZER_API_URL.substring(0, DIRECT_HUMANIZER_API_URL.indexOf('/humanize_text')) 
+  : DIRECT_HUMANIZER_API_URL;
+
 // Console log the URLs being used (helpful for debugging)
 console.log('API Base URL:', API_BASE_URL);
 console.log('Direct Humanizer API URL:', DIRECT_HUMANIZER_API_URL);
+console.log('Humanizer Base URL:', HUMANIZER_BASE_URL);
 
 /**
  * Humanize text by sending it to the humanizer API
@@ -40,8 +46,7 @@ export const humanizeText = async (text, aiScore = null) => {
       }
     }
     
-    // Send the request directly to the humanizer API
-    // Using the input_text field which is what the API expects
+    // Using fetch directly with the full URL
     const response = await fetch(DIRECT_HUMANIZER_API_URL, {
       method: 'POST',
       headers,
@@ -49,7 +54,7 @@ export const humanizeText = async (text, aiScore = null) => {
         input_text: text  // This is the required format for the FastAPI endpoint
       }),
       // Add timeout to avoid hanging requests
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(20000)
     });
 
     // Handle unsuccessful responses
@@ -211,27 +216,40 @@ export const getHumanizeStats = async () => {
  */
 export const isHumanizerAvailable = async () => {
   try {
-    // Extract the base URL (without the /humanize_text endpoint)
-    const baseUrl = DIRECT_HUMANIZER_API_URL.includes('/humanize_text') 
-      ? DIRECT_HUMANIZER_API_URL.substring(0, DIRECT_HUMANIZER_API_URL.indexOf('/humanize_text')) 
-      : DIRECT_HUMANIZER_API_URL;
+    // Try the root endpoint (/) first - this is guaranteed to exist in the FastAPI app
+    console.log(`Checking humanizer availability at: ${HUMANIZER_BASE_URL}`);
     
-    // Try the health endpoint first
-    const healthUrl = `${baseUrl}/health`;
-    console.log(`Checking humanizer health at: ${healthUrl}`);
-    
-    const response = await fetch(healthUrl, {
+    const response = await fetch(HUMANIZER_BASE_URL, {
       method: 'GET',
       signal: AbortSignal.timeout(5000)
     });
     
     if (response.ok) {
+      console.log('Humanizer service is available (root endpoint check)');
       return true;
     }
     
-    // If health check fails, try the endpoint directly
-    // Try a simple request to see if it responds at all
-    console.log(`Health check failed, trying direct endpoint check: ${DIRECT_HUMANIZER_API_URL}`);
+    // If root check fails, try the /echo_text endpoint as a backup
+    console.log(`Root check failed, trying echo_text endpoint: ${HUMANIZER_BASE_URL}/echo_text`);
+    
+    const echoResponse = await fetch(`${HUMANIZER_BASE_URL}/echo_text`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        input_text: 'test'
+      }),
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (echoResponse.ok) {
+      console.log('Humanizer service is available (echo_text endpoint check)');
+      return true;
+    }
+    
+    // As a last resort, try the actual /humanize_text endpoint with a minimal request
+    console.log(`Echo check failed, trying direct endpoint: ${DIRECT_HUMANIZER_API_URL}`);
     
     const directResponse = await fetch(DIRECT_HUMANIZER_API_URL, {
       method: 'POST',
@@ -244,9 +262,11 @@ export const isHumanizerAvailable = async () => {
       signal: AbortSignal.timeout(5000)
     });
     
-    return directResponse.ok;
+    const isAvailable = directResponse.ok;
+    console.log(`Humanizer service is ${isAvailable ? 'available' : 'unavailable'} (direct endpoint check)`);
+    return isAvailable;
   } catch (error) {
-    console.error('Humanizer health check failed:', error);
+    console.error('Humanizer availability check failed:', error);
     return false;
   }
 };
