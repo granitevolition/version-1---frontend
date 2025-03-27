@@ -1,40 +1,89 @@
-# Frontend for User Registration System
+# User Registration Frontend
 
-This repository contains a React-based frontend for a user registration system that connects to the backend API.
+This is the frontend application for the user registration system that integrates with a PostgreSQL database. The application provides user registration, login functionality, and text humanization features.
 
 ## Features
 
-- User registration form with validation
-- Clean and responsive design
-- Connection to backend API
+- User registration with optional email and phone fields
+- User authentication and session management
+- Text humanization service integration
+- AI content detection
+- Dashboard with usage statistics
+- Responsive design for mobile and desktop
 
-## Setup
+## Build & Deployment
 
-1. Clone this repository
-2. Install dependencies with `npm install`
-3. Set up environment variables by creating a `.env.local` file:
-   ```
-   REACT_APP_API_URL=http://localhost:3000/api
-   ```
-4. Run the development server with `npm start`
+### Local Development
 
-## Deployment on Railway
+```bash
+# Install dependencies
+npm install
 
-This repository is configured for easy deployment on Railway:
+# Run in development mode
+npm start
 
-1. Create a new service in Railway linked to this repository
-2. Set the required environment variables:
-   - `REACT_APP_API_URL` (pointing to your deployed backend API)
-3. Railway will automatically deploy the frontend
+# Build for production
+npm run build
+```
 
-## Connection to Backend
+### Docker Deployment
 
-This frontend is designed to work with the backend API from the `version-1---backend` repository. It makes API calls to the `/api/users/register` endpoint to register new users.
+The application includes a Dockerfile for containerized deployment:
 
-## Repository Structure
+```bash
+# Build the Docker image
+docker build -t user-registration-frontend .
 
-- `src/`: Source code
-  - `components/`: React components
-  - `services/`: API services for backend communication
-  - `styles/`: CSS files
-- `public/`: Static assets
+# Run the container
+docker run -p 80:80 user-registration-frontend
+```
+
+## Environment Variables
+
+The application uses the following environment variables:
+
+- `REACT_APP_API_URL`: URL of the backend API (default: http://localhost:5000/api/v1)
+- `CI`: Set to `false` to prevent treating warnings as errors during build
+
+## API Integration
+
+The frontend connects to the backend API for the following functions:
+
+- User registration and authentication
+- Session verification
+- Text humanization services
+- Usage statistics
+
+## Troubleshooting Common Issues
+
+### Build Errors
+
+If you encounter ESLint errors during build:
+
+1. Set `CI=false` in your environment variables
+2. Fix ESLint errors in your code
+3. Make sure all imports are used or removed
+
+### API Connection Issues
+
+If the application can't connect to the API:
+
+1. Check that the backend server is running
+2. Verify that the REACT_APP_API_URL is correctly set
+3. Check browser console for detailed error messages
+4. Ensure CORS is properly configured on the backend
+
+### Docker Build Issues
+
+If Docker build fails:
+
+1. Check the Dockerfile for correct Node.js version
+2. Ensure all dependencies are properly listed in package.json
+3. Set CI=false in the Dockerfile ENV section
+
+## Recent Fixes
+
+- Added missing API functions in api.js for user registration and authentication
+- Removed unused import in humanizeApi.js to fix ESLint warning
+- Added CI=false to multiple locations to prevent warnings from causing build failures
+- Improved error handling for network issues
