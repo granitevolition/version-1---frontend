@@ -1,171 +1,175 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { loginUser, isLoggedIn, checkApiHealth } from '../services/api';
 import '../styles/LoginForm.css';
 
 const LoginForm = () => {
-  const [formData, setFormData] = useState({
-    username: '',
-    password: ''
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [apiStatus, setApiStatus] = useState({
+    status: 'checking',
+    message: 'Checking connection to server...'
   });
   
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [apiStatus, setApiStatus] = useState(null);
   const navigate = useNavigate();
-
+  const location = useLocation();
+  
   // Check if user is already logged in
   useEffect(() => {
     if (isLoggedIn()) {
       navigate('/dashboard');
     }
-  }, [navigate]);
-
-  // Check API health on component mount
-  useEffect(() => {
-    const checkHealth = async () => {
+    
+    // Check the API health
+    const checkApiStatus = async () => {
       try {
         const health = await checkApiHealth();
+        if (health.status === 'healthy' || health.status === 'degraded') {
+          setApiStatus({
+            status: 'connected',
+            message: 'Connected to server'
+          });
+        } else {
+          setApiStatus({
+            status: 'error',
+            message: 'Server is unavailable or experiencing issues'
+          });
+        }
+      } catch (error) {
+        console.error('API health check failed:', error);
         setApiStatus({
-          status: 'connected',
-          details: health
-        });
-      } catch (err) {
-        console.error('API health check failed:', err);
-        setApiStatus({
-          status: 'disconnected',
-          error: err.message
+          status: 'error',
+          message: 'Could not connect to server'
         });
       }
     };
     
-    checkHealth();
+    checkApiStatus();
     
-    // Auto-clear messages after 5 seconds
-    const messageTimer = setTimeout(() => {
-      if (message) setMessage('');
-    }, 5000);
-    
-    return () => clearTimeout(messageTimer);
-  }, [message]);
+    // Check if redirected from registration
+    const { state } = location;
+    if (state && state.registered) {
+      setUsername(state.username || '');
+    }
+  }, [navigate, location]);
 
-  // Handle input change
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setMessage('');
     setError('');
 
+    // Validate inputs
+    if (!username) {
+      setError('Username is required');
+      return;
+    }
+    
+    if (!password) {
+      setError('Password is required');
+      return;
+    }
+    
     try {
-      console.log('Submitting login for:', formData.username);
+      setIsLoading(true);
       
-      // Call the API service to login the user
-      const response = await loginUser(formData);
-      console.log('Login response:', response);
+      // Log API URL for debugging
+      console.log('API URL:', process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1');
       
-      setMessage('Login successful! Redirecting to dashboard...');
+      const credentials = {
+        username,
+        password
+      };
       
-      // Redirect to dashboard after successful login
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 1500);
+      console.log('Attempting login for user:', username);
       
-    } catch (err) {
-      console.error('Login error caught in component:', err);
+      const response = await loginUser(credentials);
       
-      let errorMessage = 'Login failed. Please try again.';
+      console.log('Login successful, redirecting to dashboard');
       
-      if (err.message.includes('Invalid username or password')) {
-        errorMessage = 'Invalid username or password. Please try again.';
-      } else if (err.message.includes('404')) {
-        errorMessage = 'Server endpoint not found. Please contact support.';
-      } else if (err.message.includes('Network Error') || err.message.includes('Failed to fetch')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      } else if (err.response) {
-        // Server responded with an error
-        const status = err.response.status;
-        const data = err.response.data;
-        
-        if (status === 401) {
-          errorMessage = 'Invalid username or password. Please try again.';
-        } else if (status === 503) {
-          errorMessage = 'Database connection error. Please try again later.';
-        } else if (data && data.message) {
-          errorMessage = data.message;
-        }
+      // Redirect to dashboard
+      navigate('/dashboard');
+      
+    } catch (error) {
+      console.error('Login error:', error);
+      
+      // Set specific error messages based on the error
+      if (error.message.includes('Invalid username or password')) {
+        setError('Invalid username or password. Please try again.');
+      } else if (error.message.includes('Network error')) {
+        setError('Network error. Please check your connection and try again.');
+      } else if (error.message.includes('timed out')) {
+        setError('Server request timed out. Please try again later.');
+      } else {
+        setError(error.message || 'Login failed. Please try again.');
       }
-      
-      setError(errorMessage);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="login-container">
-      <div className="form-card">
-        <h2>Login to Your Account</h2>
+      <form className="login-form" onSubmit={handleSubmit}>
+        <h1>Login</h1>
         
-        {apiStatus && apiStatus.status === 'disconnected' && (
-          <div className="error-message">
-            API connection issue: {apiStatus.error}
+        {apiStatus.status === 'error' && (
+          <div className="api-status error">
+            <strong>⚠️ {apiStatus.message}</strong>
+            <p>The server may be down or experiencing issues. Login might not work correctly.</p>
           </div>
         )}
         
-        {message && <div className="success-message">{message}</div>}
         {error && <div className="error-message">{error}</div>}
         
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="username">Username</label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              placeholder="Enter your username"
-              disabled={loading}
-              required
-            />
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Enter your password"
-              disabled={loading}
-              required
-            />
-          </div>
-          
-          <button 
-            type="submit" 
-            className="submit-button"
-            disabled={loading}
-          >
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
-        
-        <div className="form-footer">
-          <p>Don't have an account? <a href="/register">Register</a></p>
+        <div className="form-group">
+          <label htmlFor="username">Username</label>
+          <input
+            type="text"
+            id="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            disabled={isLoading}
+            required
+          />
         </div>
-      </div>
+        
+        <div className="form-group">
+          <label htmlFor="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={isLoading}
+            required
+          />
+        </div>
+        
+        <button 
+          type="submit" 
+          className="login-button"
+          disabled={isLoading || apiStatus.status === 'checking'}
+        >
+          {isLoading ? 'Logging in...' : 'Login'}
+        </button>
+        
+        <div className="register-link">
+          Don't have an account? <a href="/register">Register here</a>
+        </div>
+      </form>
+      
+      {/* Debugging info - hidden in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="debug-info">
+          <h3>Debug Information</h3>
+          <pre>
+            API URL: {process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1'} <br />
+            API Status: {apiStatus.status} <br />
+            Environment: {process.env.NODE_ENV}
+          </pre>
+        </div>
+      )}
     </div>
   );
 };
