@@ -6,12 +6,16 @@ import { isLoggedIn, getAuthHeader } from './api';
 // The backend API base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://version-1-backend-production.up.railway.app/api/v1';
 
-// The humanizer API URL (specific endpoint for humanizing text)
-const HUMANIZER_API_URL = process.env.REACT_APP_HUMANIZER_API_URL || 'https://web-production-3db6c.up.railway.app/humanize_text';
+// Direct humanizer API URL - used only for health checks
+const DIRECT_HUMANIZER_API_URL = process.env.REACT_APP_HUMANIZER_API_URL || 'https://web-production-3db6c.up.railway.app/humanize_text';
+
+// Our backend proxy endpoint
+const HUMANIZE_ENDPOINT = `${API_BASE_URL}/humanize/humanize-text`;
 
 // Console log the URLs being used (helpful for debugging)
 console.log('API Base URL:', API_BASE_URL);
-console.log('Humanizer API URL:', HUMANIZER_API_URL);
+console.log('Using backend proxy endpoint:', HUMANIZE_ENDPOINT);
+console.log('Direct Humanizer URL (for health checks only):', DIRECT_HUMANIZER_API_URL);
 
 /**
  * Humanize text by sending it to our backend proxy
@@ -26,7 +30,7 @@ export const humanizeText = async (text, aiScore = null) => {
 
   try {
     // For debugging - log the endpoint we're using
-    console.log(`Sending text to humanize endpoint: ${HUMANIZER_API_URL}`);
+    console.log(`Sending text to backend proxy: ${HUMANIZE_ENDPOINT}`);
     
     // Authentication headers
     const headers = {
@@ -37,16 +41,19 @@ export const humanizeText = async (text, aiScore = null) => {
     if (isLoggedIn()) {
       const authHeader = getAuthHeader();
       if (authHeader) {
-        headers.Authorization = authHeader;
+        Object.assign(headers, authHeader);
       }
     }
     
-    // Send the request directly to the humanizer API
-    const response = await fetch(HUMANIZER_API_URL, {
+    console.log('Request headers:', headers);
+    
+    // Send the request to our backend proxy
+    const response = await fetch(HUMANIZE_ENDPOINT, {
       method: 'POST',
       headers,
       body: JSON.stringify({ 
-        input_text: text // This is the required field name in the API
+        text: text, // Match the parameter name expected by our backend
+        aiScore: aiScore
       }),
       // Add timeout to avoid hanging requests
       signal: AbortSignal.timeout(15000)
@@ -54,16 +61,26 @@ export const humanizeText = async (text, aiScore = null) => {
 
     // Handle unsuccessful responses
     if (!response.ok) {
+      // Log the detailed error for debugging
+      console.error('Humanization request failed:', {
+        status: response.status,
+        statusText: response.statusText
+      });
+      
       // Try to parse the error response
       let errorMessage = `Humanization failed: ${response.status} ${response.statusText}`;
       
       try {
         const errorData = await response.json();
+        console.error('Error response data:', errorData);
         if (errorData && errorData.message) {
           errorMessage = errorData.message;
+        } else if (errorData && errorData.error) {
+          errorMessage = errorData.error;
         }
       } catch (e) {
         // If parsing fails, use the default error message
+        console.error('Failed to parse error response:', e);
       }
       
       throw new Error(errorMessage);
@@ -73,10 +90,11 @@ export const humanizeText = async (text, aiScore = null) => {
     const data = await response.json();
     console.log('Humanization successful:', data);
     
-    // Return the humanized text - look for the 'result' field which is what the FastAPI returns
+    // Our backend proxy returns { original, humanized } format
     return {
       originalText: text,
-      humanizedText: data.result || data.humanized_text || data.humanized || text,
+      // Handle both direct and proxy response formats
+      humanizedText: data.humanized || data.result || data.humanized_text || text,
       message: 'Text successfully humanized!'
     };
   } catch (error) {
@@ -211,10 +229,28 @@ export const getHumanizeStats = async () => {
  */
 export const isHumanizerAvailable = async () => {
   try {
-    // Try the service root (removing the /humanize_text endpoint part)
-    const baseUrl = HUMANIZER_API_URL.includes('/humanize_text') 
-      ? HUMANIZER_API_URL.substring(0, HUMANIZER_API_URL.indexOf('/humanize_text')) 
-      : HUMANIZER_API_URL;
+    // First try our backend's health check for the humanizer service
+    try {
+      const response = await fetch(`${API_BASE_URL}/humanize/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Check if the humanizer status is included in the response
+        if (data && data.humanizer) {
+          return data.humanizer.status === 'available';
+        }
+      }
+    } catch (proxyErr) {
+      console.warn('Humanizer proxy health check failed, trying direct check:', proxyErr);
+    }
+    
+    // Fallback: Check the direct humanizer API
+    const baseUrl = DIRECT_HUMANIZER_API_URL.includes('/humanize_text') 
+      ? DIRECT_HUMANIZER_API_URL.substring(0, DIRECT_HUMANIZER_API_URL.indexOf('/humanize_text')) 
+      : DIRECT_HUMANIZER_API_URL;
     
     const response = await fetch(baseUrl, {
       method: 'GET',
