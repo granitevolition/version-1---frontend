@@ -4,6 +4,13 @@
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
 
+// Cache for health check to avoid excessive API calls
+let healthCheckCache = {
+  status: null,
+  timestamp: 0,
+  expiresIn: 60000 // 1 minute cache
+};
+
 /**
  * Register a new user
  * @param {Object} userData - User registration data
@@ -11,12 +18,20 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
  */
 export const registerUser = async (userData) => {
   try {
+    // Check if API is available before making request
+    const isAvailable = await isApiAvailable();
+    if (!isAvailable) {
+      throw new Error('Registration service is currently unavailable. Please try again later.');
+    }
+
     const response = await fetch(`${API_URL}/users/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(userData),
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(15000)
     });
 
     if (!response.ok) {
@@ -37,6 +52,16 @@ export const registerUser = async (userData) => {
     return await response.json();
   } catch (error) {
     console.error('Registration error:', error);
+    
+    // Provide more specific error messages
+    if (error.name === 'AbortError') {
+      throw new Error('Registration request timed out. Please try again later.');
+    }
+    
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Network error. Please check your connection and try again.');
+    }
+    
     throw error;
   }
 };
@@ -48,12 +73,20 @@ export const registerUser = async (userData) => {
  */
 export const loginUser = async (credentials) => {
   try {
+    // Check if API is available before making request
+    const isAvailable = await isApiAvailable();
+    if (!isAvailable) {
+      throw new Error('Login service is currently unavailable. Please try again later.');
+    }
+
     const response = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(credentials),
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(15000)
     });
 
     if (!response.ok) {
@@ -86,6 +119,16 @@ export const loginUser = async (credentials) => {
     return data;
   } catch (error) {
     console.error('Login error:', error);
+    
+    // Provide more specific error messages
+    if (error.name === 'AbortError') {
+      throw new Error('Login request timed out. Please try again later.');
+    }
+    
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Network error. Please check your connection and try again.');
+    }
+    
     throw error;
   }
 };
@@ -100,14 +143,21 @@ export const logoutUser = async () => {
     
     if (sessionToken) {
       try {
-        await fetch(`${API_URL}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionToken}`
-          },
-          body: JSON.stringify({ sessionToken }),
-        });
+        // Check if API is available before making request
+        const isAvailable = await isApiAvailable();
+        
+        if (isAvailable) {
+          await fetch(`${API_URL}/auth/logout`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${sessionToken}`
+            },
+            body: JSON.stringify({ sessionToken }),
+            // Add timeout to avoid hanging requests
+            signal: AbortSignal.timeout(5000)
+          });
+        }
       } catch (apiError) {
         console.warn('Error calling logout API:', apiError);
         // Continue with local logout even if API call fails
@@ -200,6 +250,16 @@ export const verifySession = async () => {
       throw new Error('No active session');
     }
     
+    // Check if API is available before making request
+    const isAvailable = await isApiAvailable();
+    if (!isAvailable) {
+      // If API is unavailable, return the cached user data
+      return {
+        message: 'Session verified (offline mode)',
+        user: getCurrentUser()
+      };
+    }
+    
     const sessionToken = localStorage.getItem('sessionToken');
     
     const response = await fetch(`${API_URL}/auth/verify-session`, {
@@ -209,6 +269,8 @@ export const verifySession = async () => {
         'Authorization': `Bearer ${sessionToken}`
       },
       body: JSON.stringify({ sessionToken }),
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(5000)
     });
 
     if (!response.ok) {
@@ -232,7 +294,60 @@ export const verifySession = async () => {
     return data;
   } catch (error) {
     console.error('Session verification error:', error);
+    
+    if (error.name === 'AbortError' || error.message === 'Failed to fetch') {
+      // If there's a network error but we have local session data, just use that
+      if (isLoggedIn() && getCurrentUser()) {
+        return {
+          message: 'Session verified (offline mode)',
+          user: getCurrentUser()
+        };
+      }
+    }
+    
     throw error;
+  }
+};
+
+/**
+ * Check if the API is available
+ * @returns {Promise<boolean>} - True if the API is available
+ */
+export const isApiAvailable = async () => {
+  // Check cache first
+  const now = Date.now();
+  if (healthCheckCache.status !== null && now - healthCheckCache.timestamp < healthCheckCache.expiresIn) {
+    return healthCheckCache.status === 'available';
+  }
+  
+  try {
+    const response = await fetch(`${API_URL}/health`, {
+      method: 'GET',
+      // Short timeout for health check
+      signal: AbortSignal.timeout(2000)
+    });
+    
+    const isAvailable = response.ok;
+    
+    // Update cache
+    healthCheckCache = {
+      status: isAvailable ? 'available' : 'unavailable',
+      timestamp: now,
+      expiresIn: 60000 // 1 minute cache
+    };
+    
+    return isAvailable;
+  } catch (error) {
+    console.warn('API health check failed:', error);
+    
+    // Update cache
+    healthCheckCache = {
+      status: 'unavailable',
+      timestamp: now,
+      expiresIn: 10000 // Shorter cache for failures (10 seconds)
+    };
+    
+    return false;
   }
 };
 
@@ -247,6 +362,8 @@ export const checkApiHealth = async () => {
       headers: {
         'Content-Type': 'application/json',
       },
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(5000)
     });
 
     if (!response.ok) {
@@ -257,9 +374,26 @@ export const checkApiHealth = async () => {
       };
     }
 
-    return await response.json();
+    const data = await response.json();
+    
+    // Update cache
+    healthCheckCache = {
+      status: data.status === 'healthy' ? 'available' : 'unavailable',
+      timestamp: Date.now(),
+      expiresIn: 60000 // 1 minute cache
+    };
+    
+    return data;
   } catch (error) {
     console.error('API health check error:', error);
+    
+    // Update cache
+    healthCheckCache = {
+      status: 'unavailable',
+      timestamp: Date.now(),
+      expiresIn: 10000 // Shorter cache for failures (10 seconds)
+    };
+    
     return {
       status: 'unhealthy',
       message: `API is unavailable: ${error.message}`,
