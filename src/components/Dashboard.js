@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, isLoggedIn, logoutUser, verifySession, isApiAvailable } from '../services/api';
-import { isHumanizerAvailable } from '../services/humanizeApi';
+import { isHumanizerAvailable, humanizeText, detectAiContent } from '../services/humanizeApi';
 import HumanizeStats from './HumanizeStats';
 import '../styles/Dashboard.css';
 
@@ -13,6 +13,15 @@ const Dashboard = () => {
     api: { status: 'checking', message: 'Checking API availability...' },
     humanizer: { status: 'checking', message: 'Checking humanizer service...' }
   });
+  
+  // Humanizer functionality
+  const [originalText, setOriginalText] = useState('');
+  const [humanizedText, setHumanizedText] = useState('');
+  const [processingText, setProcessingText] = useState(false);
+  const [aiScore, setAiScore] = useState(null);
+  const [showAiScore, setShowAiScore] = useState(false);
+  const [humanizeMessage, setHumanizeMessage] = useState('');
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -99,8 +108,92 @@ const Dashboard = () => {
     }
   };
 
-  const navigateTo = (path) => {
-    navigate(path);
+  const handleInputChange = (e) => {
+    setOriginalText(e.target.value);
+    
+    // Reset results when input changes
+    if (humanizedText) {
+      setHumanizedText('');
+    }
+    if (humanizeMessage) {
+      setHumanizeMessage('');
+    }
+    if (showAiScore) {
+      setShowAiScore(false);
+    }
+  };
+
+  const handleHumanizeSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Validate input
+    if (!originalText || originalText.trim() === '') {
+      setError('Please enter some text to humanize');
+      return;
+    }
+    
+    setProcessingText(true);
+    setError('');
+    setHumanizeMessage('');
+
+    try {
+      // First, detect if the text appears to be AI-generated
+      try {
+        console.log('Detecting AI content...');
+        const detection = await detectAiContent(originalText);
+        console.log('AI detection result:', detection);
+        setAiScore(detection);
+        setShowAiScore(true);
+      } catch (detectionErr) {
+        console.error('AI detection error:', detectionErr);
+        // Continue with humanization even if detection fails
+      }
+      
+      // Then humanize the text
+      try {
+        console.log('Sending text to humanizer...');
+        const result = await humanizeText(originalText, aiScore);
+        console.log('Humanization successful');
+        
+        setHumanizedText(result.humanizedText);
+        setHumanizeMessage(result.message || 'Text successfully humanized!');
+      } catch (humanizeErr) {
+        console.error('Humanization error:', humanizeErr);
+        
+        if (humanizeErr.message.includes('Network error') || humanizeErr.message.includes('Failed to fetch')) {
+          // For network errors, use local humanization as fallback
+          console.log('Using fallback humanization...');
+          setHumanizedText(fallbackHumanize(originalText));
+          setHumanizeMessage('Text humanized using fallback method (server unavailable). For best results, try again later.');
+        } else {
+          throw humanizeErr;
+        }
+      }
+    } catch (err) {
+      console.error('Error during humanization process:', err);
+      setError(err.message || 'An error occurred while processing the text. Please try again.');
+    } finally {
+      setProcessingText(false);
+    }
+  };
+  
+  // Copy humanized text to clipboard
+  const copyToClipboard = () => {
+    if (!humanizedText) return;
+    
+    navigator.clipboard.writeText(humanizedText)
+      .then(() => {
+        setHumanizeMessage('Copied to clipboard!');
+        setTimeout(() => {
+          if (humanizeMessage === 'Copied to clipboard!') {
+            setHumanizeMessage('');
+          }
+        }, 3000);
+      })
+      .catch((err) => {
+        console.error('Failed to copy:', err);
+        setError('Failed to copy to clipboard');
+      });
   };
 
   if (loading) {
@@ -134,6 +227,7 @@ const Dashboard = () => {
 
       {user && (
         <div className="dashboard-content">
+          {/* User Profile Card */}
           <div className="user-card">
             <div className="user-info">
               <h2>User Profile</h2>
@@ -154,49 +248,99 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="feature-cards">
-            <div 
-              className={`feature-card ${services.humanizer.status !== 'available' ? 'disabled' : ''}`}
-              onClick={() => services.humanizer.status === 'available' && navigateTo('/humanize')}
-            >
-              <div className="feature-icon humanize-icon">Humanize</div>
-              <h3>Humanize AI Text</h3>
-              <p>Transform AI-generated content into natural, human-like text that bypasses AI detection.</p>
-              {services.humanizer.status === 'available' ? (
-                <button className="feature-button">Go to Humanizer</button>
-              ) : (
-                <div className="feature-unavailable">Service Unavailable</div>
-              )}
-            </div>
+          {/* Direct Humanize Card */}
+          <div className="humanize-card">
+            <h2>Text Humanizer</h2>
+            <p>Transform AI-generated content into natural, human-like text that bypasses AI detection.</p>
+            
+            {services.humanizer.status !== 'available' && (
+              <div className="warning-message">
+                <strong>Using Fallback Mode:</strong> The humanization service is currently operating with reduced capabilities. Results may be less effective.
+              </div>
+            )}
+            
+            {humanizeMessage && <div className="success-message">{humanizeMessage}</div>}
+            
+            <form onSubmit={handleHumanizeSubmit}>
+              <div className="form-group">
+                <label htmlFor="original-text">Paste your AI-generated text here:</label>
+                <textarea
+                  id="original-text"
+                  value={originalText}
+                  onChange={handleInputChange}
+                  placeholder="Enter the text you want to humanize..."
+                  rows={6}
+                  disabled={processingText}
+                />
+              </div>
 
-            <div 
-              className={`feature-card ${services.api.status !== 'available' ? 'disabled' : ''}`}
-              onClick={() => services.api.status === 'available' && navigateTo('/ai-detector')}
-            >
-              <div className="feature-icon detector-icon">Detect</div>
-              <h3>AI Content Detector</h3>
-              <p>Check if your text will be flagged as AI-generated by detection tools.</p>
-              {services.api.status === 'available' ? (
-                <button className="feature-button">Go to Detector</button>
-              ) : (
-                <div className="feature-unavailable">Service Unavailable</div>
-              )}
-            </div>
+              <button 
+                type="submit" 
+                className="humanize-button"
+                disabled={processingText || !originalText}
+              >
+                {processingText ? 'Processing...' : 'Humanize Text'}
+              </button>
+            </form>
+
+            {showAiScore && aiScore && (
+              <div className="ai-detection-result">
+                <h3>AI Detection Results</h3>
+                <div className="detection-meters">
+                  <div className="meter-container">
+                    <div className="meter-label">AI Probability</div>
+                    <div className="meter">
+                      <div 
+                        className="meter-bar" 
+                        style={{ 
+                          width: `${aiScore.ai_score}%`, 
+                          backgroundColor: `rgba(255, 0, 0, ${aiScore.ai_score / 100})` 
+                        }}
+                      />
+                    </div>
+                    <div className="meter-value">{aiScore.ai_score}%</div>
+                  </div>
+                  <div className="meter-container">
+                    <div className="meter-label">Human Probability</div>
+                    <div className="meter">
+                      <div 
+                        className="meter-bar" 
+                        style={{ 
+                          width: `${aiScore.human_score}%`, 
+                          backgroundColor: `rgba(0, 255, 0, ${aiScore.human_score / 100})` 
+                        }}
+                      />
+                    </div>
+                    <div className="meter-value">{aiScore.human_score}%</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {humanizedText && (
+              <div className="result-section">
+                <h3>Humanized Result</h3>
+                <div className="humanized-text">
+                  <p>{humanizedText}</p>
+                </div>
+                <div className="result-actions">
+                  <button onClick={copyToClipboard} className="action-button">
+                    Copy to Clipboard
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Usage Statistics */}
-          {services.api.status === 'available' ? (
+          {services.api.status === 'available' && (
             <HumanizeStats />
-          ) : (
-            <div className="stats-unavailable">
-              <h2>Text Humanization Stats</h2>
-              <p>Statistics are unavailable while the API is offline.</p>
-            </div>
           )}
 
+          {/* Tips Panel */}
           <div className="dashboard-panels">
             <div className="panel">
-              <h3>Andikar AI Quick Tips</h3>
+              <h3>Quick Tips</h3>
               <div className="panel-content">
                 <p>Get the most out of our text humanization tools:</p>
                 <ul className="tips-list">
@@ -213,5 +357,97 @@ const Dashboard = () => {
     </div>
   );
 };
+
+/**
+ * Fallback humanization function for when the API is unavailable
+ * This is only for development/testing or when the backend is down
+ */
+function fallbackHumanize(text) {
+  // This is a very simplified version that adds some human-like elements
+  
+  // Split into sentences
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  
+  // Process each sentence
+  const processedSentences = sentences.map(sentence => {
+    // Occasionally add filler words
+    if (Math.random() < 0.2) {
+      const fillers = ["I mean, ", "Like, ", "You know, ", "Basically, ", "Actually, "];
+      const filler = fillers[Math.floor(Math.random() * fillers.length)];
+      sentence = filler + sentence.charAt(0).toLowerCase() + sentence.slice(1);
+    }
+    
+    // Occasionally replace formal words
+    const formalToInformal = {
+      "Additionally": "Also",
+      "Furthermore": "Plus",
+      "Subsequently": "Then",
+      "Therefore": "So",
+      "However": "But",
+      "Nevertheless": "Still",
+      "Consequently": "So",
+      "Approximately": "About",
+      "Sufficient": "Enough",
+      "Numerous": "Many",
+      "Utilize": "Use",
+      "Obtain": "Get",
+      "Purchase": "Buy",
+      "Residence": "Home"
+    };
+    
+    Object.entries(formalToInformal).forEach(([formal, informal]) => {
+      const regex = new RegExp(`\\b${formal}\\b`, 'gi');
+      if (Math.random() < 0.7) { // 70% chance to replace
+        sentence = sentence.replace(regex, informal);
+      }
+    });
+    
+    return sentence;
+  });
+  
+  // Join sentences, occasionally inserting contractions
+  let humanizedText = processedSentences.join(' ');
+  
+  // Convert some phrases to contractions
+  const fullToContraction = {
+    "it is": "it's",
+    "I am": "I'm",
+    "you are": "you're",
+    "they are": "they're",
+    "we are": "we're",
+    "he is": "he's",
+    "she is": "she's",
+    "that is": "that's",
+    "there is": "there's",
+    "who is": "who's",
+    "what is": "what's",
+    "cannot": "can't",
+    "will not": "won't",
+    "should not": "shouldn't",
+    "could not": "couldn't",
+    "would not": "wouldn't",
+    "do not": "don't",
+    "does not": "doesn't",
+    "did not": "didn't",
+    "have not": "haven't",
+    "has not": "hasn't",
+    "had not": "hadn't",
+    "I will": "I'll",
+    "you will": "you'll",
+    "he will": "he'll",
+    "she will": "she'll",
+    "we will": "we'll",
+    "they will": "they'll"
+  };
+  
+  Object.entries(fullToContraction).forEach(([full, contraction]) => {
+    const regex = new RegExp(`\\b${full}\\b`, 'gi');
+    if (Math.random() < 0.8) { // 80% chance to use contractions
+      humanizedText = humanizedText.replace(regex, contraction);
+    }
+  });
+  
+  return humanizedText;
+}
 
 export default Dashboard;
