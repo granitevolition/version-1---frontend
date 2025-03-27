@@ -1,30 +1,36 @@
-# Use Node.js LTS version with full Alpine image (not slim)
-FROM node:16-alpine as build-stage
-
-# Install npm and ensure npx is available
-RUN apk add --no-cache --update npm
+# Use a specific Node.js version that's not Alpine-based
+FROM node:16 as build
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files first for better layer caching
+# Copy package files and install dependencies
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
 # Copy all files
-COPY . /app/
+COPY . .
 
-# Set CI=false to prevent treating warnings as errors in build
+# Set CI=false to prevent treating warnings as errors
 ENV CI=false
 
 # Build the application
 RUN npm run build
 
-# Production environment
-FROM nginx:stable-alpine
-COPY --from=build-stage /app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Final production image
+FROM node:16-slim
+
+# Install serve package globally
+RUN npm install -g serve
+
+# Set working directory
+WORKDIR /app
+
+# Copy build from the previous stage
+COPY --from=build /app/build ./build
+
+# Expose port
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+
+# Start command using serve instead of npx
+CMD ["serve", "-s", "build", "-l", "80"]
