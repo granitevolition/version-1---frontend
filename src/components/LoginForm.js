@@ -26,10 +26,20 @@ const LoginForm = () => {
     const checkApiStatus = async () => {
       try {
         const health = await checkApiHealth();
-        if (health.status === 'healthy' || health.status === 'degraded') {
+        console.log('Health check response:', health);
+        
+        // Check database status
+        const dbStatus = health.services?.database?.status || 'unknown';
+        
+        if (health.status === 'healthy') {
           setApiStatus({
             status: 'connected',
             message: 'Connected to server'
+          });
+        } else if (health.status === 'degraded' && dbStatus === 'disconnected') {
+          setApiStatus({
+            status: 'warning',
+            message: 'Database service is unavailable. Login might not work correctly.'
           });
         } else {
           setApiStatus({
@@ -48,11 +58,18 @@ const LoginForm = () => {
     
     checkApiStatus();
     
+    // Set up periodic health checks
+    const healthCheckInterval = setInterval(checkApiStatus, 30000); // Check every 30 seconds
+    
     // Check if redirected from registration
     const { state } = location;
     if (state && state.registered) {
       setUsername(state.username || '');
     }
+    
+    return () => {
+      clearInterval(healthCheckInterval);
+    };
   }, [navigate, location]);
 
   const handleSubmit = async (e) => {
@@ -100,6 +117,13 @@ const LoginForm = () => {
         setError('Network error. Please check your connection and try again.');
       } else if (error.message.includes('timed out')) {
         setError('Server request timed out. Please try again later.');
+      } else if (error.message.includes('Database connection is not available')) {
+        setError('Login service is currently unavailable. Please try again later.');
+        // Update API status to reflect database issue
+        setApiStatus({
+          status: 'warning',
+          message: 'Database service is unavailable. Login might not work correctly.'
+        });
       } else {
         setError(error.message || 'Login failed. Please try again.');
       }
@@ -108,17 +132,31 @@ const LoginForm = () => {
     }
   };
 
+  // Render a banner based on API status
+  const renderApiStatusBanner = () => {
+    if (apiStatus.status === 'connected') {
+      return null;
+    }
+    
+    return (
+      <div className={`api-status ${apiStatus.status}`}>
+        <strong>
+          {apiStatus.status === 'warning' ? '⚠️' : '❌'} {apiStatus.message}
+        </strong>
+        {apiStatus.status === 'error' && (
+          <p>The server may be down or experiencing issues. Login might not work correctly.</p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="login-container">
       <form className="login-form" onSubmit={handleSubmit}>
         <h1>Login</h1>
         
-        {apiStatus.status === 'error' && (
-          <div className="api-status error">
-            <strong>⚠️ {apiStatus.message}</strong>
-            <p>The server may be down or experiencing issues. Login might not work correctly.</p>
-          </div>
-        )}
+        {/* API status banner */}
+        {renderApiStatusBanner()}
         
         {error && <div className="error-message">{error}</div>}
         
