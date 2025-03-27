@@ -37,7 +37,7 @@ api.interceptors.request.use(request => {
   console.log('API Request:', {
     url: request.url,
     method: request.method,
-    data: request.data,
+    data: request.data ? { ...request.data, password: request.data.password ? '[REDACTED]' : undefined } : undefined,
     headers: request.headers
   });
   return request;
@@ -116,7 +116,7 @@ export const testApiEcho = async (data) => {
 
 /**
  * Register a new user
- * @param {Object} userData - User registration data (username, password)
+ * @param {Object} userData - User registration data (username, password, email, phone)
  * @returns {Promise<Object>} - Registered user data
  */
 export const registerUser = async (userData) => {
@@ -151,6 +151,152 @@ export const registerUser = async (userData) => {
     console.error('Registration error:', error);
     throw error;
   }
+};
+
+/**
+ * Login a user
+ * @param {Object} credentials - Login credentials (username, password)
+ * @returns {Promise<Object>} - Login response with user data and session token
+ */
+export const loginUser = async (credentials) => {
+  try {
+    console.log('Sending login request to:', `${API_URL}/auth/login`);
+    
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    });
+    
+    if (!response.ok) {
+      // Try to parse error response
+      const errorData = await response.json().catch(() => ({}));
+      
+      // Handle authentication failure
+      if (response.status === 401) {
+        throw new Error(errorData.message || 'Invalid username or password.');
+      }
+      
+      throw new Error(errorData.message || `Status: ${response.status}, ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Login successful:', { ...data, session: { ...data.session, token: '[REDACTED]' } });
+    
+    // Store session token in localStorage
+    if (data.session && data.session.token) {
+      localStorage.setItem('sessionToken', data.session.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Login error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Logout the current user
+ * @returns {Promise<Object>} - Logout response
+ */
+export const logoutUser = async () => {
+  try {
+    const sessionToken = localStorage.getItem('sessionToken');
+    
+    if (!sessionToken) {
+      // Already logged out
+      localStorage.removeItem('user');
+      return { message: 'Already logged out' };
+    }
+    
+    const response = await fetch(`${API_URL}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionToken }),
+    });
+    
+    // Always clear local storage, even if the request fails
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('user');
+    
+    if (!response.ok) {
+      // Just log the error, but don't throw since we already cleared local storage
+      console.warn('Error during logout:', response.status, response.statusText);
+      return { message: 'Logged out' };
+    }
+    
+    const data = await response.json();
+    console.log('Logout successful:', data);
+    return data;
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Still remove the session info even if the request fails
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('user');
+    return { message: 'Logged out' };
+  }
+};
+
+/**
+ * Verify the current session
+ * @returns {Promise<Object>} - Session verification response
+ */
+export const verifySession = async () => {
+  try {
+    const sessionToken = localStorage.getItem('sessionToken');
+    
+    if (!sessionToken) {
+      throw new Error('No session token found');
+    }
+    
+    const response = await fetch(`${API_URL}/auth/verify-session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionToken }),
+    });
+    
+    if (!response.ok) {
+      // Session invalid or expired, clear local storage
+      localStorage.removeItem('sessionToken');
+      localStorage.removeItem('user');
+      throw new Error('Invalid or expired session');
+    }
+    
+    const data = await response.json();
+    console.log('Session valid:', data);
+    
+    // Update stored user data
+    localStorage.setItem('user', JSON.stringify(data.user));
+    
+    return data;
+  } catch (error) {
+    console.error('Session verification error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check if a user is currently logged in
+ * @returns {Boolean} - True if user is logged in
+ */
+export const isLoggedIn = () => {
+  return !!localStorage.getItem('sessionToken');
+};
+
+/**
+ * Get the current user data from localStorage
+ * @returns {Object|null} - User data or null if not logged in
+ */
+export const getCurrentUser = () => {
+  const userData = localStorage.getItem('user');
+  return userData ? JSON.parse(userData) : null;
 };
 
 /**
