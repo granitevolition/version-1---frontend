@@ -17,38 +17,79 @@
   margin-top: 10px;
 }
 
-.nav-links button {
+.nav-link {
   background-color: transparent;
   color: white;
-  border: none;
+  text-decoration: none;
   padding: 8px 16px;
   margin: 0 10px;
   font-size: 16px;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: border-color 0.3s;
+  transition: border-color 0.3s, color 0.3s;
 }
 
-.nav-links button:hover {
+.nav-link:hover {
   border-bottom-color: rgba(255, 255, 255, 0.5);
+  color: #61dafb;
 }
 
-.nav-links button.active {
+.nav-link.active {
   border-bottom-color: white;
   font-weight: bold;
+  color: #61dafb;
 }
 
 main {
   flex: 1;
   padding: 20px;
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   width: 100%;
 }
 
 footer {
   background-color: #f8f9fa;
-  padding: 10px;
+  padding: 15px;
   color: #6c757d;
   font-size: 0.9rem;
+  margin-top: auto;
+  border-top: 1px solid #e9ecef;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f7f8fc;
+}
+
+/* Add styles for active link */
+a.active {
+  color: #61dafb;
+  border-bottom-color: #61dafb;
+  font-weight: bold;
+}
+
+/* Responsive styles */
+@media (max-width: 600px) {
+  .nav-links {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .nav-link {
+    margin: 5px 0;
+  }
+  
+  .App-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  main {
+    padding: 10px;
+  }
 }
