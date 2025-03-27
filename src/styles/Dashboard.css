@@ -61,70 +61,6 @@ body {
   font-weight: normal;
 }
 
-/* Status action buttons container */
-.status-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-  flex-wrap: wrap;
-}
-
-/* Check status button */
-.check-status-button {
-  background-color: #ffc107;
-  color: #856404;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 10px;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
-}
-
-.check-status-button:hover {
-  background-color: #ffb300;
-}
-
-.check-status-button:disabled {
-  background-color: #ffe082;
-  cursor: not-allowed;
-}
-
-/* Mock mode button */
-.mock-mode-button {
-  background-color: #e0e0e0;
-  color: #424242;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 10px;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
-}
-
-.mock-mode-button:hover {
-  background-color: #bdbdbd;
-}
-
-/* Retry button within error messages */
-.retry-button {
-  background-color: transparent;
-  color: #c62828;
-  border: 1px solid #ffcdd2;
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-left: 10px;
-  font-size: 12px;
-  transition: all 0.2s ease;
-}
-
-.retry-button:hover {
-  background-color: #ffcdd2;
-}
-
 /* Card styles */
 .content-area {
   display: flex;
@@ -172,7 +108,7 @@ body {
 
 /* Disabled card when service is unavailable */
 .disabled-card {
-  opacity: 0.9;
+  opacity: 0.8;
   position: relative;
 }
 
@@ -183,7 +119,7 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.2);
   border-radius: 8px;
   pointer-events: none;
 }
@@ -362,10 +298,6 @@ body {
   border-radius: 4px;
   margin-bottom: 16px;
   font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
 }
 
 .success-message {
@@ -406,20 +338,5 @@ body {
   
   .humanizer-card h2 {
     padding-right: 0;
-  }
-  
-  .error-message {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .retry-button {
-    margin-left: 0;
-    margin-top: 8px;
-  }
-  
-  .status-actions {
-    flex-direction: column;
-    gap: 8px;
   }
 }
