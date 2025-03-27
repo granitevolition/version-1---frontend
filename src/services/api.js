@@ -235,3 +235,35 @@ export const verifySession = async () => {
     throw error;
   }
 };
+
+/**
+ * Check the health of the API
+ * @returns {Promise<Object>} - Health status
+ */
+export const checkApiHealth = async () => {
+  try {
+    const response = await fetch(`${API_URL}/health`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        status: 'unhealthy',
+        message: `API is unavailable: ${response.status} ${response.statusText}`,
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('API health check error:', error);
+    return {
+      status: 'unhealthy',
+      message: `API is unavailable: ${error.message}`,
+      timestamp: new Date().toISOString()
+    };
+  }
+};
