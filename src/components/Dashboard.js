@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser, logoutUser } from '../services/api';
-import { humanizeText } from '../services/humanizeApi';
+import { getCurrentUser, logoutUser, isApiAvailable } from '../services/api';
+import { humanizeText, isHumanizerAvailable } from '../services/humanizeApi';
 import '../styles/Dashboard.css';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [serverStatus, setServerStatus] = useState(null);
   
   // Humanizer functionality
   const [originalText, setOriginalText] = useState('');
@@ -26,6 +27,27 @@ const Dashboard = () => {
       navigate('/login');
     }
     setLoading(false);
+    
+    // Check server status
+    const checkServerStatus = async () => {
+      try {
+        const apiAvailable = await isApiAvailable();
+        const humanizerAvailable = await isHumanizerAvailable();
+        
+        setServerStatus({
+          api: apiAvailable,
+          humanizer: humanizerAvailable
+        });
+      } catch (err) {
+        console.error('Error checking server status:', err);
+        setServerStatus({
+          api: false,
+          humanizer: false
+        });
+      }
+    };
+    
+    checkServerStatus();
   }, [navigate]);
 
   const handleLogout = () => {
@@ -81,11 +103,17 @@ const Dashboard = () => {
   return (
     <div className="dashboard-container">
       <div className="dashboard-header">
-        <h1>Welcome to Andikar AI Dashboard</h1>
+        <h1>Welcome to Your Dashboard</h1>
         <button onClick={handleLogout} className="logout-button">Logout</button>
       </div>
 
       {error && <div className="error-message">{error}</div>}
+      
+      {serverStatus && !serverStatus.humanizer && (
+        <div className="server-status-alert">
+          ⚠️ Humanizer service is unavailable. The text processing may not work correctly.
+        </div>
+      )}
       
       <div className="content-area">
         {/* User Info Card */}
@@ -99,8 +127,8 @@ const Dashboard = () => {
           )}
         </div>
         
-        {/* Humanizer Card */}
-        <div className="card">
+        {/* Humanizer Card - MAIN FEATURE */}
+        <div className="card humanizer-card">
           <h2>Text Humanizer</h2>
           <p>Transform AI-generated content into human-like text.</p>
           
@@ -112,8 +140,9 @@ const Dashboard = () => {
                 value={originalText}
                 onChange={handleInputChange}
                 placeholder="Enter text to humanize..."
-                rows={5}
+                rows={8}
                 disabled={processingText}
+                className="humanize-textarea"
               />
             </div>
 
@@ -121,7 +150,7 @@ const Dashboard = () => {
 
             <button 
               type="submit" 
-              className="primary-button"
+              className="primary-button humanize-button"
               disabled={processingText || !originalText}
             >
               {processingText ? 'Processing...' : 'Humanize Text'}
@@ -139,6 +168,18 @@ const Dashboard = () => {
               </button>
             </div>
           )}
+        </div>
+        
+        {/* Quick Tips Card */}
+        <div className="card">
+          <h2>Tips for Better Results</h2>
+          <ul className="tips-list">
+            <li>Paste AI-generated content in the text area above</li>
+            <li>Click "Humanize Text" to transform it</li>
+            <li>For best results, use text between 100-1000 words</li>
+            <li>The humanized text will appear below the button</li>
+            <li>Use "Copy to Clipboard" to save the results</li>
+          </ul>
         </div>
       </div>
     </div>
