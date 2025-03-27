@@ -4,17 +4,17 @@ This repository contains the frontend code for the Andikar AI text humanizer app
 
 ## Recent Fixes
 
-- **Fixed Dashboard Humanizer Section**: Enhanced the Dashboard component to properly display the text humanizing feature with improved styling and visibility
-- **Improved API Integration**: Updated the humanizeApi.js to correctly connect to the backend and fallback to direct API access if needed
-- **Enhanced User Interface**: Added clear visual indicators for server status and improved the styling of the humanizer text area
-- **Configuration Updates**: Added proper .env file with correct API URLs
-- **Error Handling**: Improved error messaging when services are unavailable
+- **Fixed Dashboard Humanizing Text Box**: Fixed the main issue where the text box for humanizing content wasn't displaying properly on the dashboard.
+- **Corrected API Endpoints**: Updated the application to use the correct backend and humanizer API endpoints.
+- **Fixed Environment Configuration**: Added proper environment variables with the correct URLs for production deployment.
+- **Enhanced Error Handling**: Improved error messages when services are unavailable.
+- **Simplified API Integration**: Updated the humanizeApi.js to directly use the humanizer service.
 
 ## Environment Configuration
 
 The application uses the following environment variables:
 
-- `REACT_APP_API_URL`: URL for the backend API (default: http://localhost:5000/api/v1)
+- `REACT_APP_API_URL`: URL for the backend API (default: https://version-1-backend-production.up.railway.app/api/v1)
 - `REACT_APP_HUMANIZER_API_URL`: URL for the humanizer API (default: https://web-production-3db6c.up.railway.app)
 
 ## Available Features
@@ -37,7 +37,7 @@ The application uses the following environment variables:
 The frontend integrates with two main APIs:
 
 1. **Backend API**: Handles authentication, user management, and proxies humanization requests
-2. **Humanizer API**: Directly processes text humanization requests (used as fallback)
+2. **Humanizer API**: Directly processes text humanization requests
 
 ## Troubleshooting
 
