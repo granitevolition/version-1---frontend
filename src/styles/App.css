@@ -11,6 +11,33 @@
   color: white;
 }
 
+.nav-links {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.nav-links button {
+  background-color: transparent;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  margin: 0 10px;
+  font-size: 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.3s;
+}
+
+.nav-links button:hover {
+  border-bottom-color: rgba(255, 255, 255, 0.5);
+}
+
+.nav-links button.active {
+  border-bottom-color: white;
+  font-weight: bold;
+}
+
 main {
   flex: 1;
   padding: 20px;
