@@ -1,49 +1,55 @@
 import React, { useState, useEffect } from 'react';
-import { testApiConnection, testApiEcho, checkApiHealth } from '../services/api';
+import { isApiAvailable, checkApiHealth } from '../services/api';
+import { isHumanizerAvailable } from '../services/humanizeApi';
 
 const TestConnectivity = () => {
-  const [testResult, setTestResult] = useState(null);
-  const [echoResult, setEchoResult] = useState(null);
+  const [apiStatus, setApiStatus] = useState({ status: 'checking', message: 'Checking connection...' });
+  const [humanizerStatus, setHumanizerStatus] = useState({ status: 'checking', message: 'Checking connection...' });
   const [healthResult, setHealthResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [echoData, setEchoData] = useState('{"test":"Hello API"}');
 
   const runApiTest = async () => {
     setLoading(true);
     setError(null);
-    setTestResult(null);
+    setApiStatus({ status: 'checking', message: 'Testing connection...' });
     
     try {
-      const result = await testApiConnection();
-      setTestResult(result);
+      const available = await isApiAvailable();
+      setApiStatus({
+        status: available ? 'available' : 'unavailable',
+        message: available ? 'API is connected' : 'API is not responding'
+      });
     } catch (err) {
       console.error('API test failed:', err);
       setError(`API test failed: ${err.message}`);
+      setApiStatus({
+        status: 'error',
+        message: `Error: ${err.message}`
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const runApiEcho = async () => {
+  const runHumanizerTest = async () => {
     setLoading(true);
     setError(null);
-    setEchoResult(null);
+    setHumanizerStatus({ status: 'checking', message: 'Testing connection...' });
     
     try {
-      // Parse the JSON data
-      let dataToSend;
-      try {
-        dataToSend = JSON.parse(echoData);
-      } catch (parseErr) {
-        throw new Error(`Invalid JSON: ${parseErr.message}`);
-      }
-      
-      const result = await testApiEcho(dataToSend);
-      setEchoResult(result);
+      const available = await isHumanizerAvailable();
+      setHumanizerStatus({
+        status: available ? 'available' : 'unavailable',
+        message: available ? 'Humanizer API is connected' : 'Humanizer API is not responding'
+      });
     } catch (err) {
-      console.error('API echo failed:', err);
-      setError(`API echo failed: ${err.message}`);
+      console.error('Humanizer test failed:', err);
+      setError(`Humanizer test failed: ${err.message}`);
+      setHumanizerStatus({
+        status: 'error',
+        message: `Error: ${err.message}`
+      });
     } finally {
       setLoading(false);
     }
@@ -68,11 +74,24 @@ const TestConnectivity = () => {
   useEffect(() => {
     // Run the health check on component mount
     runHealthCheck();
+    runApiTest();
+    runHumanizerTest();
   }, []);
+
+  // Helper for status colors
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'available': return '#4caf50';  // Green
+      case 'unavailable': return '#f44336';  // Red
+      case 'checking': return '#2196f3';  // Blue
+      case 'error': return '#ff9800';  // Orange
+      default: return '#9e9e9e';  // Grey
+    }
+  };
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>API Connectivity Test</h1>
+      <h1>Service Connectivity Test</h1>
       
       {error && (
         <div style={{ padding: '10px', background: '#ffebee', border: '1px solid #ffcdd2', borderRadius: '4px', marginBottom: '20px' }}>
@@ -80,6 +99,60 @@ const TestConnectivity = () => {
           <p>{error}</p>
         </div>
       )}
+      
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+        <div style={{ 
+          flex: 1, 
+          padding: '15px', 
+          borderRadius: '4px', 
+          border: '1px solid #ddd',
+          background: '#f9f9f9'
+        }}>
+          <h2>Backend API</h2>
+          <div style={{
+            padding: '10px',
+            background: getStatusColor(apiStatus.status) + '22',
+            borderLeft: `4px solid ${getStatusColor(apiStatus.status)}`,
+            marginBottom: '10px'
+          }}>
+            <p><strong>Status:</strong> {apiStatus.status}</p>
+            <p>{apiStatus.message}</p>
+          </div>
+          <button 
+            onClick={runApiTest}
+            disabled={loading}
+            style={{ padding: '8px 16px', marginRight: '10px' }}
+          >
+            {loading ? 'Testing...' : 'Test API Connection'}
+          </button>
+        </div>
+        
+        <div style={{ 
+          flex: 1, 
+          padding: '15px', 
+          borderRadius: '4px', 
+          border: '1px solid #ddd',
+          background: '#f9f9f9'
+        }}>
+          <h2>Humanizer API</h2>
+          <div style={{
+            padding: '10px',
+            background: getStatusColor(humanizerStatus.status) + '22',
+            borderLeft: `4px solid ${getStatusColor(humanizerStatus.status)}`,
+            marginBottom: '10px'
+          }}>
+            <p><strong>Status:</strong> {humanizerStatus.status}</p>
+            <p>{humanizerStatus.message}</p>
+          </div>
+          <button 
+            onClick={runHumanizerTest}
+            disabled={loading}
+            style={{ padding: '8px 16px', marginRight: '10px' }}
+          >
+            {loading ? 'Testing...' : 'Test Humanizer Connection'}
+          </button>
+        </div>
+      </div>
       
       <div style={{ marginBottom: '30px' }}>
         <h2>Health Check</h2>
@@ -94,55 +167,7 @@ const TestConnectivity = () => {
         {healthResult && (
           <div style={{ marginTop: '10px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
             <h3>Health Check Result</h3>
-            <pre>{JSON.stringify(healthResult, null, 2)}</pre>
-          </div>
-        )}
-      </div>
-      
-      <div style={{ marginBottom: '30px' }}>
-        <h2>API Connection Test</h2>
-        <button 
-          onClick={runApiTest}
-          disabled={loading}
-          style={{ padding: '8px 16px', marginRight: '10px' }}
-        >
-          {loading ? 'Testing...' : 'Test API Connection'}
-        </button>
-        
-        {testResult && (
-          <div style={{ marginTop: '10px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
-            <h3>Test Result</h3>
-            <pre>{JSON.stringify(testResult, null, 2)}</pre>
-          </div>
-        )}
-      </div>
-      
-      <div>
-        <h2>API Echo Test</h2>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>
-            Data to Echo (JSON):
-          </label>
-          <textarea
-            value={echoData}
-            onChange={(e) => setEchoData(e.target.value)}
-            style={{ width: '100%', height: '100px', padding: '8px' }}
-            disabled={loading}
-          />
-        </div>
-        
-        <button 
-          onClick={runApiEcho}
-          disabled={loading}
-          style={{ padding: '8px 16px', marginRight: '10px' }}
-        >
-          {loading ? 'Testing...' : 'Run Echo Test'}
-        </button>
-        
-        {echoResult && (
-          <div style={{ marginTop: '10px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
-            <h3>Echo Result</h3>
-            <pre>{JSON.stringify(echoResult, null, 2)}</pre>
+            <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(healthResult, null, 2)}</pre>
           </div>
         )}
       </div>
