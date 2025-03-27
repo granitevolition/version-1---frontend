@@ -8,7 +8,8 @@ const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [serverStatus, setServerStatus] = useState({ api: true, humanizer: true });
+  // Default to true for better user experience - we'll verify on load
+  const [serverStatus, setServerStatus] = useState({ api: true, humanizer: true, checking: false });
   
   // Humanizer functionality
   const [originalText, setOriginalText] = useState('');
@@ -31,23 +32,28 @@ const Dashboard = () => {
     // Check server status
     const checkServerStatus = async () => {
       try {
-        // Start by assuming services are available
+        // Indicate we're checking
         setServerStatus(prev => ({
           ...prev,
           checking: true
         }));
 
         // Check API availability
-        const apiAvailable = await isApiAvailable();
+        let apiAvailable = true;
+        try {
+          apiAvailable = await isApiAvailable();
+        } catch (err) {
+          console.error('Error checking API status:', err);
+          // Don't automatically set to false on error
+        }
         
-        // Check humanizer availability - use a try/catch to prevent false negatives
+        // Check humanizer availability
         let humanizerAvailable = true;
         try {
           humanizerAvailable = await isHumanizerAvailable();
         } catch (err) {
           console.error('Error checking humanizer status:', err);
-          // Default to true if there's an error checking (prevents false negatives)
-          humanizerAvailable = true;
+          // Don't automatically set to false on error
         }
         
         console.log("Server status:", { api: apiAvailable, humanizer: humanizerAvailable });
@@ -60,7 +66,7 @@ const Dashboard = () => {
         });
       } catch (err) {
         console.error('Error checking server status:', err);
-        // Don't automatically set services to offline on error
+        // Don't automatically set to false on error
         setServerStatus(prev => ({
           ...prev,
           checking: false,
@@ -102,11 +108,12 @@ const Dashboard = () => {
     setHumanizeError('');
 
     try {
-      // Try to humanize the text
+      // Actually try using the service regardless of what the status check says
+      // This gives us a chance to actually test the service with real data
       const result = await humanizeText(originalText);
       setHumanizedText(result.humanizedText);
       
-      // If we succeed, update the server status to available
+      // If we successfully connected, update the service status
       setServerStatus(prev => ({
         ...prev,
         humanizer: true
@@ -115,22 +122,14 @@ const Dashboard = () => {
       console.error('Humanization error:', err);
       setHumanizeError(err.message || 'Server Error: Unable to humanize text. The server may be offline.');
       
-      // Only mark the service as unavailable if we get a specific connection error
-      if (err.message.includes('Failed to fetch') || 
-          err.message.includes('Unable to connect') ||
-          err.message.includes('offline')) {
-        
-        // Double-check availability
-        try {
-          const available = await isHumanizerAvailable();
-          setServerStatus(prev => ({
-            ...prev,
-            humanizer: available
-          }));
-        } catch (checkErr) {
-          // On error checking, don't automatically mark as unavailable
-          console.error('Error checking humanizer service after error:', checkErr);
-        }
+      // Only mark the service as unavailable if we get a connection error
+      if (err.message.includes('offline') || 
+          err.message.includes('connect') || 
+          err.message.includes('Failed to fetch')) {
+        setServerStatus(prev => ({
+          ...prev,
+          humanizer: false
+        }));
       }
     } finally {
       setProcessingText(false);
@@ -153,13 +152,22 @@ const Dashboard = () => {
   const checkServiceStatus = async () => {
     try {
       setServerStatus(prev => ({ ...prev, checking: true }));
+      
+      // Force the check regardless of cache
+      localStorage.removeItem('working_check_strategy');
       const humanizerAvailable = await isHumanizerAvailable();
+      
       setServerStatus(prev => ({ 
         ...prev, 
         humanizer: humanizerAvailable,
         checking: false,
         lastChecked: new Date().toISOString()
       }));
+      
+      if (humanizerAvailable) {
+        // Clear any previous errors if the service is now available
+        setHumanizeError('');
+      }
     } catch (err) {
       console.error('Manual status check failed:', err);
       setServerStatus(prev => ({ 
@@ -168,6 +176,13 @@ const Dashboard = () => {
         lastChecked: new Date().toISOString()
       }));
     }
+  };
+  
+  // Function to enable mock mode for development/testing
+  const enableMockMode = () => {
+    localStorage.setItem('use_mock_humanizer', 'true');
+    alert('Mock mode enabled - Humanizer service will be treated as available');
+    checkServiceStatus();
   };
 
   if (loading) {
@@ -188,9 +203,14 @@ const Dashboard = () => {
           <strong>⚠️ Humanizer service is currently offline.</strong>
           <p>The text humanizing feature is not available. This could be due to scheduled maintenance or a temporary service disruption.</p>
           <p>Please try again later or contact support if the problem persists.</p>
-          <button onClick={checkServiceStatus} className="check-status-button">
-            {serverStatus.checking ? 'Checking...' : 'Check service status again'}
-          </button>
+          <div className="status-actions">
+            <button onClick={checkServiceStatus} className="check-status-button" disabled={serverStatus.checking}>
+              {serverStatus.checking ? 'Checking...' : 'Check service status again'}
+            </button>
+            <button onClick={enableMockMode} className="mock-mode-button">
+              Enable mock mode (for development)
+            </button>
+          </div>
         </div>
       )}
       
@@ -229,24 +249,33 @@ const Dashboard = () => {
                 onChange={handleInputChange}
                 placeholder="Enter text to humanize..."
                 rows={8}
-                disabled={processingText || !serverStatus.humanizer}
+                // Always allow typing even if service appears offline - we'll try anyway
                 className="humanize-textarea"
               />
             </div>
 
-            {humanizeError && <div className="error-message">{humanizeError}</div>}
+            {humanizeError && (
+              <div className="error-message">
+                {humanizeError}
+                {humanizeError.includes('offline') && (
+                  <button onClick={checkServiceStatus} className="retry-button">
+                    {serverStatus.checking ? 'Checking...' : 'Check connection again'}
+                  </button>
+                )}
+              </div>
+            )}
 
             <button 
               type="submit" 
               className="primary-button humanize-button"
-              disabled={processingText || !originalText || !serverStatus.humanizer}
+              disabled={processingText || !originalText}
             >
               {processingText ? 'Processing...' : 'Humanize Text'}
             </button>
             
             {!serverStatus.humanizer && (
               <p className="offline-message">
-                This feature is currently unavailable because the humanizer service is offline.
+                The service appears to be offline, but you can still try. It might work!
               </p>
             )}
           </form>
