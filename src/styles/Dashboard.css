@@ -41,6 +41,68 @@
   border-left: 5px solid #c62828;
 }
 
+/* Service Status Indicators */
+.service-status {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.service-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.service-indicator::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.service-indicator.available {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.service-indicator.available::before {
+  background-color: #4caf50;
+}
+
+.service-indicator.unavailable, 
+.service-indicator.error {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.service-indicator.unavailable::before,
+.service-indicator.error::before {
+  background-color: #f44336;
+}
+
+.service-indicator.checking {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.service-indicator.checking::before {
+  background-color: #2196f3;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
 .dashboard-content {
   display: flex;
   flex-direction: column;
@@ -97,9 +159,26 @@
   align-items: center;
 }
 
-.feature-card:hover {
+.feature-card:not(.disabled):hover {
   transform: translateY(-5px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Disabled feature card */
+.feature-card.disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+}
+
+.feature-unavailable {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 8px 15px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-top: auto;
 }
 
 .feature-icon {
@@ -148,6 +227,24 @@
 .feature-button:hover {
   background-color: #333;
   color: white;
+}
+
+/* Stats unavailable section */
+.stats-unavailable {
+  background-color: #f5f5f5;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.stats-unavailable h2 {
+  color: #333;
+  margin-top: 0;
+}
+
+.stats-unavailable p {
+  color: #666;
 }
 
 .dashboard-panels {
@@ -240,5 +337,9 @@
   
   .dashboard-header h1 {
     font-size: 1.7rem;
+  }
+  
+  .service-status {
+    justify-content: center;
   }
 }
