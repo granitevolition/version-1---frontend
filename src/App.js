@@ -12,7 +12,7 @@ function App() {
     <Router>
       <div className="App">
         <header className="App-header">
-          <h1>Granite Volition</h1>
+          <h1>Andikar AI</h1>
         </header>
         <main>
           <Routes>
@@ -25,7 +25,7 @@ function App() {
           </Routes>
         </main>
         <footer>
-          &copy; {new Date().getFullYear()} Granite Volition. All rights reserved.
+          &copy; {new Date().getFullYear()} Andikar AI. All rights reserved.
         </footer>
       </div>
     </Router>
