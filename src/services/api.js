@@ -17,7 +17,7 @@ const getBackendUrl = () => {
   return 'http://localhost:3000/api';
 };
 
-// Use the corrected URL
+// Use the corrected URL - compute this once
 const API_URL = getBackendUrl();
 
 console.log('BACKEND API URL:', API_URL);
@@ -172,18 +172,24 @@ export const loginUser = async (credentials) => {
     
     if (!response.ok) {
       // Try to parse error response
-      const errorData = await response.json().catch(() => ({}));
+      let errorMessage = 'Login failed. Please try again.';
       
-      // Handle authentication failure
-      if (response.status === 401) {
-        throw new Error(errorData.message || 'Invalid username or password.');
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (e) {
+        // If response can't be parsed, use status text
+        errorMessage = `Login failed: ${response.status} ${response.statusText}`;
       }
       
-      throw new Error(errorData.message || `Status: ${response.status}, ${response.statusText}`);
+      throw new Error(errorMessage);
     }
     
     const data = await response.json();
-    console.log('Login successful:', { ...data, session: { ...data.session, token: '[REDACTED]' } });
+    console.log('Login successful:', { 
+      ...data, 
+      session: data.session ? { ...data.session, token: '[REDACTED]' } : undefined 
+    });
     
     // Store session token in localStorage
     if (data.session && data.session.token) {
@@ -203,15 +209,18 @@ export const loginUser = async (credentials) => {
  * @returns {Promise<Object>} - Logout response
  */
 export const logoutUser = async () => {
+  const sessionToken = localStorage.getItem('sessionToken');
+  
+  // Always clear local storage regardless of API response
+  localStorage.removeItem('sessionToken');
+  localStorage.removeItem('user');
+  
+  // If no session, just return success
+  if (!sessionToken) {
+    return { message: 'Logged out' };
+  }
+  
   try {
-    const sessionToken = localStorage.getItem('sessionToken');
-    
-    if (!sessionToken) {
-      // Already logged out
-      localStorage.removeItem('user');
-      return { message: 'Already logged out' };
-    }
-    
     const response = await fetch(`${API_URL}/auth/logout`, {
       method: 'POST',
       headers: {
@@ -220,24 +229,17 @@ export const logoutUser = async () => {
       body: JSON.stringify({ sessionToken }),
     });
     
-    // Always clear local storage, even if the request fails
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('user');
-    
-    if (!response.ok) {
-      // Just log the error, but don't throw since we already cleared local storage
-      console.warn('Error during logout:', response.status, response.statusText);
-      return { message: 'Logged out' };
+    // Parse response if successful
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Logout successful:', data);
+      return data;
     }
     
-    const data = await response.json();
-    console.log('Logout successful:', data);
-    return data;
+    // Just return success even on errors
+    return { message: 'Logged out' };
   } catch (error) {
-    console.error('Logout error:', error);
-    // Still remove the session info even if the request fails
-    localStorage.removeItem('sessionToken');
-    localStorage.removeItem('user');
+    console.warn('Logout API call failed, but local session was cleared:', error);
     return { message: 'Logged out' };
   }
 };
@@ -247,13 +249,13 @@ export const logoutUser = async () => {
  * @returns {Promise<Object>} - Session verification response
  */
 export const verifySession = async () => {
+  const sessionToken = localStorage.getItem('sessionToken');
+  
+  if (!sessionToken) {
+    throw new Error('No session token found');
+  }
+  
   try {
-    const sessionToken = localStorage.getItem('sessionToken');
-    
-    if (!sessionToken) {
-      throw new Error('No session token found');
-    }
-    
     const response = await fetch(`${API_URL}/auth/verify-session`, {
       method: 'POST',
       headers: {
@@ -283,7 +285,7 @@ export const verifySession = async () => {
 };
 
 /**
- * Check if a user is currently logged in
+ * Check if a user is currently logged in without making API calls
  * @returns {Boolean} - True if user is logged in
  */
 export const isLoggedIn = () => {
@@ -295,66 +297,88 @@ export const isLoggedIn = () => {
  * @returns {Object|null} - User data or null if not logged in
  */
 export const getCurrentUser = () => {
-  const userData = localStorage.getItem('user');
-  return userData ? JSON.parse(userData) : null;
+  try {
+    const userData = localStorage.getItem('user');
+    return userData ? JSON.parse(userData) : null;
+  } catch (e) {
+    console.error('Error parsing user data from localStorage', e);
+    return null;
+  }
 };
+
+// Memoized/cached health check result
+let cachedHealthCheck = null;
+let healthCheckPromise = null;
 
 /**
  * Check the API health
+ * @param {Boolean} force - Force a fresh check instead of using cache
  * @returns {Promise<Object>} - Health status
  */
-export const checkApiHealth = async () => {
-  try {
-    // First try the backend root endpoint
-    try {
-      const rootResponse = await fetch(`${API_URL.replace('/api', '')}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (rootResponse.ok) {
-        const data = await rootResponse.json();
-        console.log('Root endpoint check successful:', data);
-        return data;
-      }
-    } catch (rootError) {
-      console.log('Root endpoint check failed, trying health endpoint');
-    }
-    
-    // Try the health endpoint
-    const response = await fetch(`${API_URL}/status/database`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    if (!response.ok) {
-      // As a last resort, try the regular health endpoint
-      const healthResponse = await fetch(`${API_URL.replace('/api', '')}/health`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!healthResponse.ok) {
-        throw new Error(`Status: ${response.status}, ${response.statusText}`);
-      }
-      
-      const healthData = await healthResponse.json();
-      return healthData;
-    }
-    
-    const data = await response.json();
-    console.log('Health check successful:', data);
-    return data;
-  } catch (error) {
-    console.error('Health check error:', error);
-    throw error;
+export const checkApiHealth = async (force = false) => {
+  // Return cached result if available and not forcing refresh
+  if (cachedHealthCheck && !force) {
+    return cachedHealthCheck;
   }
+  
+  // If a check is already in progress, return that promise
+  if (healthCheckPromise) {
+    return healthCheckPromise;
+  }
+  
+  // Create a new health check promise
+  healthCheckPromise = (async () => {
+    try {
+      // Try each endpoint in sequence until one works
+      const endpoints = [
+        `${API_URL.replace('/api', '')}/health`,
+        `${API_URL}/status/database`,
+        `${API_URL}/health`
+      ];
+      
+      let result = null;
+      let error = null;
+      
+      // Try each endpoint until one succeeds
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            result = await response.json();
+            console.log(`Health check successful on ${endpoint}:`, result);
+            break;
+          }
+        } catch (err) {
+          error = err;
+          console.log(`Health check failed on ${endpoint}:`, err);
+          // Continue to the next endpoint
+        }
+      }
+      
+      if (result) {
+        // Cache successful result
+        cachedHealthCheck = result;
+        return result;
+      }
+      
+      // If all endpoints failed, throw the last error
+      throw error || new Error('All health check endpoints failed');
+    } catch (error) {
+      console.error('Health check error:', error);
+      throw error;
+    } finally {
+      // Clear the promise reference
+      healthCheckPromise = null;
+    }
+  })();
+  
+  return healthCheckPromise;
 };
 
 export default api;
