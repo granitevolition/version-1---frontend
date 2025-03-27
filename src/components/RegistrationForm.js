@@ -11,6 +11,7 @@ const RegistrationForm = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
 
   // Check API health on component mount
   useEffect(() => {
@@ -47,6 +48,7 @@ const RegistrationForm = () => {
     setLoading(true);
     setMessage('');
     setError('');
+    setDebugInfo(null);
 
     // Form validation
     if (!formData.username || !formData.password) {
@@ -60,8 +62,26 @@ const RegistrationForm = () => {
       
       // Call the API service to register the user
       const response = await registerUser(formData);
-      setMessage(`User ${response.username} registered successfully!`);
-      setFormData({ username: '', password: '' });
+      console.log('Registration response:', response);
+      
+      // Save debug info
+      setDebugInfo({
+        response: response,
+        responseType: typeof response,
+        hasUsername: response && 'username' in response,
+        username: response ? response.username : 'undefined',
+        userId: response ? response.id : 'undefined'
+      });
+      
+      // Check if response has a valid username
+      if (response && response.username) {
+        setMessage(`User ${response.username} registered successfully!`);
+        setFormData({ username: '', password: '' });
+      } else {
+        setMessage(`Registration successful!`);
+        setFormData({ username: '', password: '' });
+        console.warn('Response missing username:', response);
+      }
     } catch (err) {
       console.error('Registration error caught in component:', err);
       
@@ -144,6 +164,14 @@ const RegistrationForm = () => {
             {loading ? 'Registering...' : 'Register'}
           </button>
         </form>
+        
+        {/* Debug info for troubleshooting */}
+        {debugInfo && (
+          <div className="debug-info" style={{ marginTop: '20px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
+            <h3>Debug Information</h3>
+            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+          </div>
+        )}
       </div>
     </div>
   );
