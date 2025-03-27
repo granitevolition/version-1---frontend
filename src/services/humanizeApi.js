@@ -1,7 +1,7 @@
 /**
  * API service for text humanization
  */
-import { getCurrentUser, isLoggedIn, getAuthHeader } from './api';
+import { isLoggedIn, getAuthHeader } from './api';
 
 // The backend API base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
