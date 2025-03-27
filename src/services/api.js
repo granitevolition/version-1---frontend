@@ -3,6 +3,7 @@
  */
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
+const BASE_URL = API_URL.replace('/api/v1', ''); // Extract the base URL without the /api/v1 path
 
 // Cache for health check to avoid excessive API calls
 let healthCheckCache = {
@@ -321,13 +322,15 @@ export const isApiAvailable = async () => {
   }
   
   try {
-    const response = await fetch(`${API_URL}/health`, {
+    // Use the base URL's /health endpoint, not the API_URL with /api/v1
+    const response = await fetch(`${BASE_URL}/health`, {
       method: 'GET',
       // Short timeout for health check
       signal: AbortSignal.timeout(2000)
     });
     
     const isAvailable = response.ok;
+    console.log('Health check result:', isAvailable ? 'Available' : 'Unavailable');
     
     // Update cache
     healthCheckCache = {
@@ -357,7 +360,9 @@ export const isApiAvailable = async () => {
  */
 export const checkApiHealth = async () => {
   try {
-    const response = await fetch(`${API_URL}/health`, {
+    // Use the base URL's /health endpoint, not the API_URL with /api/v1
+    console.log('Checking health at:', `${BASE_URL}/health`);
+    const response = await fetch(`${BASE_URL}/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -375,6 +380,7 @@ export const checkApiHealth = async () => {
     }
 
     const data = await response.json();
+    console.log('Health check response:', data);
     
     // Update cache
     healthCheckCache = {
