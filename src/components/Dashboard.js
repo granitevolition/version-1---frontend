@@ -8,7 +8,7 @@ const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [serverStatus, setServerStatus] = useState({ api: false, humanizer: false });
+  const [serverStatus, setServerStatus] = useState({ api: true, humanizer: true });
   
   // Humanizer functionality
   const [originalText, setOriginalText] = useState('');
@@ -31,28 +31,49 @@ const Dashboard = () => {
     // Check server status
     const checkServerStatus = async () => {
       try {
+        // Start by assuming services are available
+        setServerStatus(prev => ({
+          ...prev,
+          checking: true
+        }));
+
+        // Check API availability
         const apiAvailable = await isApiAvailable();
-        const humanizerAvailable = await isHumanizerAvailable();
+        
+        // Check humanizer availability - use a try/catch to prevent false negatives
+        let humanizerAvailable = true;
+        try {
+          humanizerAvailable = await isHumanizerAvailable();
+        } catch (err) {
+          console.error('Error checking humanizer status:', err);
+          // Default to true if there's an error checking (prevents false negatives)
+          humanizerAvailable = true;
+        }
         
         console.log("Server status:", { api: apiAvailable, humanizer: humanizerAvailable });
         
         setServerStatus({
           api: apiAvailable,
-          humanizer: humanizerAvailable
+          humanizer: humanizerAvailable,
+          checking: false,
+          lastChecked: new Date().toISOString()
         });
       } catch (err) {
         console.error('Error checking server status:', err);
-        setServerStatus({
-          api: false,
-          humanizer: false
-        });
+        // Don't automatically set services to offline on error
+        setServerStatus(prev => ({
+          ...prev,
+          checking: false,
+          lastChecked: new Date().toISOString()
+        }));
       }
     };
     
+    // Run the initial check
     checkServerStatus();
     
-    // Check server status periodically
-    const statusInterval = setInterval(checkServerStatus, 30000); // Every 30 seconds
+    // Check server status periodically (every 30 seconds)
+    const statusInterval = setInterval(checkServerStatus, 30000);
     
     return () => clearInterval(statusInterval);
   }, [navigate]);
@@ -81,18 +102,36 @@ const Dashboard = () => {
     setHumanizeError('');
 
     try {
+      // Try to humanize the text
       const result = await humanizeText(originalText);
       setHumanizedText(result.humanizedText);
-    } catch (err) {
-      console.error('Humanization error:', err);
-      setHumanizeError('Server Error: Unable to humanize text. The server may be offline.');
       
-      // Update server status after an error
-      const humanizerAvailable = await isHumanizerAvailable();
+      // If we succeed, update the server status to available
       setServerStatus(prev => ({
         ...prev,
-        humanizer: humanizerAvailable
+        humanizer: true
       }));
+    } catch (err) {
+      console.error('Humanization error:', err);
+      setHumanizeError(err.message || 'Server Error: Unable to humanize text. The server may be offline.');
+      
+      // Only mark the service as unavailable if we get a specific connection error
+      if (err.message.includes('Failed to fetch') || 
+          err.message.includes('Unable to connect') ||
+          err.message.includes('offline')) {
+        
+        // Double-check availability
+        try {
+          const available = await isHumanizerAvailable();
+          setServerStatus(prev => ({
+            ...prev,
+            humanizer: available
+          }));
+        } catch (checkErr) {
+          // On error checking, don't automatically mark as unavailable
+          console.error('Error checking humanizer service after error:', checkErr);
+        }
+      }
     } finally {
       setProcessingText(false);
     }
@@ -108,6 +147,27 @@ const Dashboard = () => {
       .catch((err) => {
         console.error('Failed to copy:', err);
       });
+  };
+
+  // Function to manually check service status
+  const checkServiceStatus = async () => {
+    try {
+      setServerStatus(prev => ({ ...prev, checking: true }));
+      const humanizerAvailable = await isHumanizerAvailable();
+      setServerStatus(prev => ({ 
+        ...prev, 
+        humanizer: humanizerAvailable,
+        checking: false,
+        lastChecked: new Date().toISOString()
+      }));
+    } catch (err) {
+      console.error('Manual status check failed:', err);
+      setServerStatus(prev => ({ 
+        ...prev, 
+        checking: false,
+        lastChecked: new Date().toISOString()
+      }));
+    }
   };
 
   if (loading) {
@@ -128,6 +188,9 @@ const Dashboard = () => {
           <strong>⚠️ Humanizer service is currently offline.</strong>
           <p>The text humanizing feature is not available. This could be due to scheduled maintenance or a temporary service disruption.</p>
           <p>Please try again later or contact support if the problem persists.</p>
+          <button onClick={checkServiceStatus} className="check-status-button">
+            {serverStatus.checking ? 'Checking...' : 'Check service status again'}
+          </button>
         </div>
       )}
       
@@ -141,6 +204,9 @@ const Dashboard = () => {
               {user.email && <p><strong>Email:</strong> {user.email}</p>}
             </div>
           )}
+          <p className={serverStatus.humanizer ? 'status-online' : 'status-offline'}>
+            {serverStatus.humanizer ? '● Online' : '● Offline'}
+          </p>
         </div>
         
         {/* Humanizer Card - MAIN FEATURE */}
