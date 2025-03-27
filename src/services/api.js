@@ -133,7 +133,14 @@ export const registerUser = async (userData) => {
     });
     
     if (!response.ok) {
+      // Try to parse error response
       const errorData = await response.json().catch(() => ({}));
+      
+      // Handle conflict (username already exists)
+      if (response.status === 409) {
+        throw new Error(errorData.message || 'Username already exists. Please choose another username.');
+      }
+      
       throw new Error(errorData.message || `Status: ${response.status}, ${response.statusText}`);
     }
     
@@ -152,7 +159,26 @@ export const registerUser = async (userData) => {
  */
 export const checkApiHealth = async () => {
   try {
-    const response = await fetch(`${API_URL}/health`, {
+    // First try the backend root endpoint
+    try {
+      const rootResponse = await fetch(`${API_URL.replace('/api', '')}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (rootResponse.ok) {
+        const data = await rootResponse.json();
+        console.log('Root endpoint check successful:', data);
+        return data;
+      }
+    } catch (rootError) {
+      console.log('Root endpoint check failed, trying health endpoint');
+    }
+    
+    // Try the health endpoint
+    const response = await fetch(`${API_URL}/status/database`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -160,7 +186,20 @@ export const checkApiHealth = async () => {
     });
     
     if (!response.ok) {
-      throw new Error(`Status: ${response.status}, ${response.statusText}`);
+      // As a last resort, try the regular health endpoint
+      const healthResponse = await fetch(`${API_URL.replace('/api', '')}/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!healthResponse.ok) {
+        throw new Error(`Status: ${response.status}, ${response.statusText}`);
+      }
+      
+      const healthData = await healthResponse.json();
+      return healthData;
     }
     
     const data = await response.json();
