@@ -1,44 +1,45 @@
 /**
  * API service for text humanization
  */
-import { getCurrentUser, isLoggedIn } from './api';
+import { getCurrentUser, isLoggedIn, getAuthHeader } from './api';
 
-// The actual humanizer API endpoint
-const HUMANIZER_API_URL = process.env.REACT_APP_HUMANIZER_API_URL || 'https://web-production-3db6c.up.railway.app';
+// The backend API base URL
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
 
 /**
- * Humanize text by sending it to the humanizer API
+ * Humanize text by sending it to our backend proxy
  * @param {string} text - Original text to humanize
+ * @param {Object} aiScore - Optional AI detection score
  * @returns {Promise<Object>} - Response with humanized text
  */
-export const humanizeText = async (text) => {
+export const humanizeText = async (text, aiScore = null) => {
   if (!text || text.trim() === '') {
     throw new Error('Please enter some text to humanize');
   }
 
   try {
-    console.log(`Sending text to humanize API: ${HUMANIZER_API_URL}/humanize_text`);
-    console.log(`Text length: ${text.length} characters`);
+    console.log(`Sending text to humanize endpoint: ${API_BASE_URL}/humanize/humanize-text`);
     
-    // Add authentication context if available
-    const metadata = {};
+    // Authentication headers
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Add auth token if user is logged in
     if (isLoggedIn()) {
-      const user = getCurrentUser();
-      if (user) {
-        metadata.userId = user.id;
-        metadata.username = user.username;
+      const authHeader = getAuthHeader();
+      if (authHeader) {
+        headers.Authorization = authHeader;
       }
     }
 
-    // Send the request to the humanizer API
-    const response = await fetch(`${HUMANIZER_API_URL}/humanize_text`, {
+    // Send the request to our backend proxy
+    const response = await fetch(`${API_BASE_URL}/humanize/humanize-text`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ 
-        input_text: text,
-        metadata
+        text,
+        aiScore
       }),
     });
 
@@ -63,26 +64,14 @@ export const humanizeText = async (text) => {
     const data = await response.json();
     console.log('Humanization successful:', data);
     
-    // Return the humanized text and any metadata
+    // Return the humanized text
     return {
       originalText: text,
-      humanizedText: data.result || data.humanized_text || data.text,
+      humanizedText: data.humanized || data.result || data.humanized_text,
       message: 'Text successfully humanized!'
     };
   } catch (error) {
     console.error('Humanization error:', error);
-    
-    // If the actual API fails, we'll implement a fallback humanization
-    // This is only for development/testing and should be removed in production
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Using fallback humanization due to API error');
-      return {
-        originalText: text,
-        humanizedText: fallbackHumanize(text),
-        message: 'Text humanized using fallback method (API unavailable)'
-      };
-    }
-    
     throw error;
   }
 };
@@ -125,6 +114,96 @@ export const detectAiContent = async (text) => {
     };
   } catch (error) {
     console.error('AI detection error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get usage statistics for the current user
+ * @returns {Promise<Object>} - User's humanize usage statistics
+ */
+export const getHumanizeStats = async () => {
+  try {
+    // Check if user is logged in
+    if (!isLoggedIn()) {
+      throw new Error('You must be logged in to view statistics');
+    }
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      ...getAuthHeader()
+    };
+    
+    const response = await fetch(`${API_BASE_URL}/humanize/stats`, {
+      method: 'GET',
+      headers
+    });
+    
+    if (!response.ok) {
+      let errorMessage = `Failed to get statistics: ${response.status} ${response.statusText}`;
+      
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (e) {
+        // If parsing fails, use the default error message
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error getting humanize stats:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get history of humanizations for the current user
+ * @param {number} page - Page number
+ * @param {number} limit - Results per page
+ * @returns {Promise<Object>} - Humanization history with pagination
+ */
+export const getHumanizeHistory = async (page = 1, limit = 10) => {
+  try {
+    // Check if user is logged in
+    if (!isLoggedIn()) {
+      throw new Error('You must be logged in to view history');
+    }
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      ...getAuthHeader()
+    };
+    
+    const response = await fetch(`${API_BASE_URL}/humanize/history?page=${page}&limit=${limit}`, {
+      method: 'GET',
+      headers
+    });
+    
+    if (!response.ok) {
+      let errorMessage = `Failed to get history: ${response.status} ${response.statusText}`;
+      
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (e) {
+        // If parsing fails, use the default error message
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error getting humanize history:', error);
     throw error;
   }
 };
@@ -235,97 +314,4 @@ function assessFormalLanguage(text) {
   }
   
   return Math.min(100, Math.max(0, Math.round(formalityScore)));
-}
-
-/**
- * Fallback humanization function for when the API is unavailable
- * This is only for development/testing
- */
-function fallbackHumanize(text) {
-  // This is a very simplified version that adds some human-like elements
-  // In a real app, remove this and rely on the actual API
-  
-  // Split into sentences
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  
-  // Process each sentence
-  const processedSentences = sentences.map(sentence => {
-    // Occasionally add filler words
-    if (Math.random() < 0.2) {
-      const fillers = ["I mean, ", "Like, ", "You know, ", "Basically, ", "Actually, "];
-      const filler = fillers[Math.floor(Math.random() * fillers.length)];
-      sentence = filler + sentence.charAt(0).toLowerCase() + sentence.slice(1);
-    }
-    
-    // Occasionally replace formal words
-    const formalToInformal = {
-      "Additionally": "Also",
-      "Furthermore": "Plus",
-      "Subsequently": "Then",
-      "Therefore": "So",
-      "However": "But",
-      "Nevertheless": "Still",
-      "Consequently": "So",
-      "Approximately": "About",
-      "Sufficient": "Enough",
-      "Numerous": "Many",
-      "Utilize": "Use",
-      "Obtain": "Get",
-      "Purchase": "Buy",
-      "Residence": "Home"
-    };
-    
-    Object.entries(formalToInformal).forEach(([formal, informal]) => {
-      const regex = new RegExp(`\\b${formal}\\b`, 'gi');
-      if (Math.random() < 0.7) { // 70% chance to replace
-        sentence = sentence.replace(regex, informal);
-      }
-    });
-    
-    return sentence;
-  });
-  
-  // Join sentences, occasionally inserting contractions
-  let humanizedText = processedSentences.join(' ');
-  
-  // Convert some phrases to contractions
-  const fullToContraction = {
-    "it is": "it's",
-    "I am": "I'm",
-    "you are": "you're",
-    "they are": "they're",
-    "we are": "we're",
-    "he is": "he's",
-    "she is": "she's",
-    "that is": "that's",
-    "there is": "there's",
-    "who is": "who's",
-    "what is": "what's",
-    "cannot": "can't",
-    "will not": "won't",
-    "should not": "shouldn't",
-    "could not": "couldn't",
-    "would not": "wouldn't",
-    "do not": "don't",
-    "does not": "doesn't",
-    "did not": "didn't",
-    "have not": "haven't",
-    "has not": "hasn't",
-    "had not": "hadn't",
-    "I will": "I'll",
-    "you will": "you'll",
-    "he will": "he'll",
-    "she will": "she'll",
-    "we will": "we'll",
-    "they will": "they'll"
-  };
-  
-  Object.entries(fullToContraction).forEach(([full, contraction]) => {
-    const regex = new RegExp(`\\b${full}\\b`, 'gi');
-    if (Math.random() < 0.8) { // 80% chance to use contractions
-      humanizedText = humanizedText.replace(regex, contraction);
-    }
-  });
-  
-  return humanizedText;
 }
