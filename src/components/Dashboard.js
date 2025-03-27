@@ -114,7 +114,7 @@ const Dashboard = () => {
   return (
     <div className="dashboard-container">
       <div className="dashboard-header">
-        <h1>Welcome to Your Dashboard</h1>
+        <h1>Welcome to Andikar AI Dashboard</h1>
         <button onClick={handleLogout} className="logout-button">
           Logout
         </button>
@@ -196,7 +196,7 @@ const Dashboard = () => {
 
           <div className="dashboard-panels">
             <div className="panel">
-              <h3>Quick Tips</h3>
+              <h3>Andikar AI Quick Tips</h3>
               <div className="panel-content">
                 <p>Get the most out of our text humanization tools:</p>
                 <ul className="tips-list">
