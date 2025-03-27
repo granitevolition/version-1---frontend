@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { humanizeText, detectAiContent } from '../services/humanizeApi';
+import { humanizeText, detectAiContent, isHumanizerAvailable } from '../services/humanizeApi';
 import { isLoggedIn } from '../services/api';
 import '../styles/HumanizeText.css';
 
@@ -8,17 +8,38 @@ const HumanizeText = () => {
   const [originalText, setOriginalText] = useState('');
   const [humanizedText, setHumanizedText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [serviceAvailable, setServiceAvailable] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [aiScore, setAiScore] = useState(null);
   const [showAiScore, setShowAiScore] = useState(false);
   const navigate = useNavigate();
 
-  // Check if user is logged in
+  // Check service availability and authentication
   useEffect(() => {
-    if (!isLoggedIn()) {
-      navigate('/login', { state: { from: '/humanize' } });
-    }
+    const initialize = async () => {
+      try {
+        // Check if user is logged in
+        if (!isLoggedIn()) {
+          navigate('/login', { state: { from: '/humanize' } });
+          return;
+        }
+      
+        // Check if the service is available
+        const available = await isHumanizerAvailable();
+        setServiceAvailable(available);
+        
+        if (!available) {
+          setError('Humanization service is currently unavailable. Basic features will still work, but AI detection may not be accurate.');
+        }
+      } catch (err) {
+        console.error('Service availability check failed:', err);
+        setServiceAvailable(false);
+        setError('Connection to humanization service could not be established. You can still use basic features.');
+      }
+    };
+
+    initialize();
   }, [navigate]);
 
   // Handle text input change
@@ -56,18 +77,33 @@ const HumanizeText = () => {
 
     try {
       // First, detect if the text appears to be AI-generated
-      const detection = await detectAiContent(originalText);
-      setAiScore(detection);
-      setShowAiScore(true);
+      try {
+        const detection = await detectAiContent(originalText);
+        setAiScore(detection);
+        setShowAiScore(true);
+      } catch (detectionErr) {
+        console.error('AI detection error:', detectionErr);
+        // Continue with humanization even if detection fails
+      }
       
       // Then humanize the text
-      const result = await humanizeText(originalText);
-      
-      setHumanizedText(result.humanizedText);
-      setMessage(result.message);
+      try {
+        const result = await humanizeText(originalText, aiScore);
+        
+        setHumanizedText(result.humanizedText);
+        setMessage(result.message);
+      } catch (humanizeErr) {
+        if (humanizeErr.message.includes('Network error') || humanizeErr.message.includes('Failed to fetch')) {
+          // For network errors, use local humanization as fallback
+          setHumanizedText(fallbackHumanize(originalText));
+          setMessage('Text humanized using fallback method (server unavailable). For best results, try again later.');
+        } else {
+          throw humanizeErr;
+        }
+      }
     } catch (err) {
-      console.error('Error during humanization:', err);
-      setError(err.message || 'An error occurred while humanizing the text');
+      console.error('Error during humanization process:', err);
+      setError(err.message || 'An error occurred while processing the text. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -112,6 +148,12 @@ const HumanizeText = () => {
         <p className="humanize-description">
           Transform AI-generated content into natural, human-like text that bypasses AI detection.
         </p>
+
+        {!serviceAvailable && (
+          <div className="warning-message">
+            <strong>Limited Functionality:</strong> The humanization service is currently operating in offline mode. Some features may be limited.
+          </div>
+        )}
 
         {error && <div className="error-message">{error}</div>}
         {message && <div className="success-message">{message}</div>}
@@ -210,5 +252,97 @@ const HumanizeText = () => {
     </div>
   );
 };
+
+/**
+ * Fallback humanization function for when the API is unavailable
+ * This is only for development/testing or when the backend is down
+ */
+function fallbackHumanize(text) {
+  // This is a very simplified version that adds some human-like elements
+  
+  // Split into sentences
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  
+  // Process each sentence
+  const processedSentences = sentences.map(sentence => {
+    // Occasionally add filler words
+    if (Math.random() < 0.2) {
+      const fillers = ["I mean, ", "Like, ", "You know, ", "Basically, ", "Actually, "];
+      const filler = fillers[Math.floor(Math.random() * fillers.length)];
+      sentence = filler + sentence.charAt(0).toLowerCase() + sentence.slice(1);
+    }
+    
+    // Occasionally replace formal words
+    const formalToInformal = {
+      "Additionally": "Also",
+      "Furthermore": "Plus",
+      "Subsequently": "Then",
+      "Therefore": "So",
+      "However": "But",
+      "Nevertheless": "Still",
+      "Consequently": "So",
+      "Approximately": "About",
+      "Sufficient": "Enough",
+      "Numerous": "Many",
+      "Utilize": "Use",
+      "Obtain": "Get",
+      "Purchase": "Buy",
+      "Residence": "Home"
+    };
+    
+    Object.entries(formalToInformal).forEach(([formal, informal]) => {
+      const regex = new RegExp(`\\b${formal}\\b`, 'gi');
+      if (Math.random() < 0.7) { // 70% chance to replace
+        sentence = sentence.replace(regex, informal);
+      }
+    });
+    
+    return sentence;
+  });
+  
+  // Join sentences, occasionally inserting contractions
+  let humanizedText = processedSentences.join(' ');
+  
+  // Convert some phrases to contractions
+  const fullToContraction = {
+    "it is": "it's",
+    "I am": "I'm",
+    "you are": "you're",
+    "they are": "they're",
+    "we are": "we're",
+    "he is": "he's",
+    "she is": "she's",
+    "that is": "that's",
+    "there is": "there's",
+    "who is": "who's",
+    "what is": "what's",
+    "cannot": "can't",
+    "will not": "won't",
+    "should not": "shouldn't",
+    "could not": "couldn't",
+    "would not": "wouldn't",
+    "do not": "don't",
+    "does not": "doesn't",
+    "did not": "didn't",
+    "have not": "haven't",
+    "has not": "hasn't",
+    "had not": "hadn't",
+    "I will": "I'll",
+    "you will": "you'll",
+    "he will": "he'll",
+    "she will": "she'll",
+    "we will": "we'll",
+    "they will": "they'll"
+  };
+  
+  Object.entries(fullToContraction).forEach(([full, contraction]) => {
+    const regex = new RegExp(`\\b${full}\\b`, 'gi');
+    if (Math.random() < 0.8) { // 80% chance to use contractions
+      humanizedText = humanizedText.replace(regex, contraction);
+    }
+  });
+  
+  return humanizedText;
+}
 
 export default HumanizeText;
