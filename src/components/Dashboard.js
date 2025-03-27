@@ -1,107 +1,67 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, NavLink } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, isLoggedIn, logoutUser, verifySession } from '../services/api';
+import HumanizeStats from './HumanizeStats';
 import '../styles/Dashboard.css';
 
-// How often to verify the session, in milliseconds
-const SESSION_VERIFICATION_INTERVAL = 5 * 60 * 1000; // 5 minutes
-
 const Dashboard = () => {
-  const [user, setUser] = useState(getCurrentUser()); // Initialize from localStorage
-  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  // Handle logout with useCallback to avoid recreating this function on each render
-  const handleLogout = useCallback(async () => {
-    try {
-      setLoading(true);
-      await logoutUser();
-      navigate('/login');
-    } catch (err) {
-      console.error('Logout failed:', err);
-      setError('Logout failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [navigate]);
+  useEffect(() => {
+    const checkAuthentication = async () => {
+      try {
+        // Check if user is logged in
+        if (!isLoggedIn()) {
+          navigate('/login');
+          return;
+        }
 
-  // Function to check authentication, wrapped in useCallback
-  const checkAuthentication = useCallback(async () => {
-    // Skip if already loading
-    if (loading) return;
+        // Load user data from local storage
+        const userData = getCurrentUser();
+        setUser(userData);
+        setLoading(false);
 
-    try {
-      setLoading(true);
-      
-      // Check if user is logged in based on localStorage
-      if (!isLoggedIn()) {
-        navigate('/login');
-        return;
-      }
-
-      // Only verify session with the server if we have a token
-      if (isLoggedIn()) {
+        // Verify session with the server asynchronously
         try {
           const sessionData = await verifySession();
           // Update user data with the latest from server
           setUser(sessionData.user);
         } catch (sessionErr) {
           console.error('Session verification failed:', sessionErr);
-          await logoutUser(); // Clear session
-          navigate('/login');
+          // Don't force logout here, as the session might be valid locally
+          // but temporarily unavailable due to backend issues
         }
+      } catch (err) {
+        console.error('Authentication check failed:', err);
+        setError('Failed to verify authentication. Please try logging in again.');
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Authentication check failed:', err);
-      setError('Failed to verify authentication. Please try logging in again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [loading, navigate]);
+    };
 
-  // Run authentication check only once on mount
-  useEffect(() => {
-    // If not logged in, redirect immediately without API call
-    if (!isLoggedIn()) {
-      navigate('/login');
-      return;
-    }
-    
-    // Otherwise check authentication with API
     checkAuthentication();
-    
-    // Set up periodic session verification
-    const intervalId = setInterval(() => {
-      if (isLoggedIn()) {
-        // Use a silent verification that doesn't show loading state
-        verifySession().catch(err => {
-          console.error('Periodic session verification failed:', err);
-          handleLogout();
-        });
-      } else {
-        clearInterval(intervalId);
-      }
-    }, SESSION_VERIFICATION_INTERVAL);
-    
-    // Clean up the interval when component unmounts
-    return () => clearInterval(intervalId);
-  }, [checkAuthentication, handleLogout, navigate]);
+  }, [navigate]);
 
-  // Show loading indicator only during initial authentication
-  if (loading && !user) {
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout failed:', err);
+      setError('Logout failed. Please try again.');
+    }
+  };
+
+  const navigateTo = (path) => {
+    navigate(path);
+  };
+
+  if (loading) {
     return (
       <div className="dashboard-container">
-        <div className="loading-spinner">Loading...</div>
-      </div>
-    );
-  }
-
-  // If no user data yet, show minimal loading interface
-  if (!user) {
-    return (
-      <div className="dashboard-container">
-        <div className="loading-spinner">Loading user data...</div>
+        <div className="loading-spinner">Loading your dashboard...</div>
       </div>
     );
   }
@@ -110,80 +70,70 @@ const Dashboard = () => {
     <div className="dashboard-container">
       <div className="dashboard-header">
         <h1>Welcome to Your Dashboard</h1>
-        <button 
-          onClick={handleLogout} 
-          className="logout-button"
-          disabled={loading}
-        >
-          {loading ? 'Logging out...' : 'Logout'}
+        <button onClick={handleLogout} className="logout-button">
+          Logout
         </button>
       </div>
 
       {error && <div className="error-message">{error}</div>}
 
-      <div className="dashboard-content">
-        <div className="user-card">
-          <div className="user-info">
-            <h2>User Profile</h2>
-            <div className="profile-detail">
-              <span className="detail-label">Username:</span>
-              <span className="detail-value">{user.username}</span>
-            </div>
-            <div className="profile-detail">
-              <span className="detail-label">User ID:</span>
-              <span className="detail-value">{user.id}</span>
-            </div>
-            {user.email && (
+      {user && (
+        <div className="dashboard-content">
+          <div className="user-card">
+            <div className="user-info">
+              <h2>User Profile</h2>
               <div className="profile-detail">
-                <span className="detail-label">Email:</span>
-                <span className="detail-value">{user.email}</span>
+                <span className="detail-label">Username:</span>
+                <span className="detail-value">{user.username}</span>
               </div>
-            )}
-            {user.phone && (
+              {user.email && (
+                <div className="profile-detail">
+                  <span className="detail-label">Email:</span>
+                  <span className="detail-value">{user.email}</span>
+                </div>
+              )}
               <div className="profile-detail">
-                <span className="detail-label">Phone:</span>
-                <span className="detail-value">{user.phone}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="dashboard-panels">
-          <div className="panel">
-            <h3>AI Text Tools</h3>
-            <div className="panel-content">
-              <p>Access our powerful AI text tools to enhance your content:</p>
-              <div className="action-buttons">
-                <NavLink to="/humanize" className="feature-button">
-                  <i className="feature-icon">✨</i>
-                  <div className="feature-details">
-                    <span className="feature-name">Humanize Text</span>
-                    <span className="feature-description">Make AI-generated text sound more human</span>
-                  </div>
-                </NavLink>
-                <NavLink to="/detect" className="feature-button">
-                  <i className="feature-icon">🔍</i>
-                  <div className="feature-details">
-                    <span className="feature-name">AI Detector</span>
-                    <span className="feature-description">Check if text will be flagged as AI-generated</span>
-                  </div>
-                </NavLink>
+                <span className="detail-label">User ID:</span>
+                <span className="detail-value">{user.id}</span>
               </div>
             </div>
           </div>
 
-          <div className="panel">
-            <h3>Account Settings</h3>
-            <div className="panel-content">
-              <p>Manage your account settings and preferences:</p>
-              <div className="action-buttons">
-                <button className="action-button">Update Profile</button>
-                <button className="action-button">Security Settings</button>
+          <div className="feature-cards">
+            <div className="feature-card" onClick={() => navigateTo('/humanize')}>
+              <div className="feature-icon humanize-icon">Humanize</div>
+              <h3>Humanize AI Text</h3>
+              <p>Transform AI-generated content into natural, human-like text that bypasses AI detection.</p>
+              <button className="feature-button">Go to Humanizer</button>
+            </div>
+
+            <div className="feature-card" onClick={() => navigateTo('/ai-detector')}>
+              <div className="feature-icon detector-icon">Detect</div>
+              <h3>AI Content Detector</h3>
+              <p>Check if your text will be flagged as AI-generated by detection tools.</p>
+              <button className="feature-button">Go to Detector</button>
+            </div>
+          </div>
+
+          {/* Usage Statistics */}
+          <HumanizeStats />
+
+          <div className="dashboard-panels">
+            <div className="panel">
+              <h3>Quick Tips</h3>
+              <div className="panel-content">
+                <p>Get the most out of our text humanization tools:</p>
+                <ul className="tips-list">
+                  <li>Use the AI detector first to see if your text needs humanizing</li>
+                  <li>Text with an AI score above 70% is likely to be flagged as AI-generated</li>
+                  <li>Always review humanized content before using it</li>
+                  <li>For best results, start with well-written AI content</li>
+                </ul>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
