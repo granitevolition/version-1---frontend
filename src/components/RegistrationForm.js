@@ -1,17 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { registerUser, checkApiHealth } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { registerUser, checkApiHealth, isLoggedIn } from '../services/api';
 import '../styles/RegistrationForm.css';
 
 const RegistrationForm = () => {
   const [formData, setFormData] = useState({
     username: '',
-    password: ''
+    password: '',
+    email: '',
+    phone: ''
   });
+  
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiStatus, setApiStatus] = useState(null);
   const [debugInfo, setDebugInfo] = useState(null);
+  const navigate = useNavigate();
+
+  // Check if user is already logged in
+  useEffect(() => {
+    if (isLoggedIn()) {
+      navigate('/dashboard');
+    }
+  }, [navigate]);
 
   // Check API health on component mount
   useEffect(() => {
@@ -68,6 +80,17 @@ const RegistrationForm = () => {
     return null;
   };
 
+  // Email validation
+  const validateEmail = (email) => {
+    if (!email) return null; // Email is optional
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return 'Please enter a valid email address';
+    }
+    return null;
+  };
+
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,6 +114,13 @@ const RegistrationForm = () => {
       return;
     }
 
+    const emailError = validateEmail(formData.email);
+    if (emailError) {
+      setError(emailError);
+      setLoading(false);
+      return;
+    }
+
     try {
       console.log('Submitting registration for:', formData.username);
       
@@ -109,12 +139,23 @@ const RegistrationForm = () => {
       
       // Check if response has a valid username
       if (response && response.username) {
-        setMessage(`User ${response.username} registered successfully!`);
-        setFormData({ username: '', password: '' });
+        setMessage(`User ${response.username} registered successfully! Please login.`);
+        // Clear form after successful registration
+        setFormData({ username: '', password: '', email: '', phone: '' });
+        
+        // Redirect to login page after 2 seconds
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
       } else {
-        setMessage(`Registration successful!`);
-        setFormData({ username: '', password: '' });
+        setMessage(`Registration successful! Please login.`);
+        setFormData({ username: '', password: '', email: '', phone: '' });
         console.warn('Response missing username:', response);
+        
+        // Redirect to login page after 2 seconds
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
       }
     } catch (err) {
       console.error('Registration error caught in component:', err);
@@ -123,6 +164,8 @@ const RegistrationForm = () => {
       
       if (err.message.includes('already exists')) {
         errorMessage = 'Username already exists. Please choose another username.';
+      } else if (err.message.includes('Email already in use')) {
+        errorMessage = 'Email already in use. Please use another email address.';
       } else if (err.message.includes('404')) {
         errorMessage = 'Server endpoint not found. Please contact support.';
       } else if (err.message.includes('Network Error') || err.message.includes('Failed to fetch')) {
@@ -135,7 +178,11 @@ const RegistrationForm = () => {
         if (status === 503) {
           errorMessage = 'Database connection error. Please try again later.';
         } else if (status === 409) {
-          errorMessage = 'Username already exists. Please choose another username.';
+          if (err.response.data && err.response.data.message) {
+            errorMessage = err.response.data.message;
+          } else {
+            errorMessage = 'Username or email already exists. Please choose another.';
+          }
         } else if (data && data.message) {
           errorMessage = data.message;
         }
@@ -171,7 +218,7 @@ const RegistrationForm = () => {
         
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="username">Username</label>
+            <label htmlFor="username">Username*</label>
             <input
               type="text"
               id="username"
@@ -180,12 +227,39 @@ const RegistrationForm = () => {
               onChange={handleChange}
               placeholder="Enter your username"
               disabled={loading}
+              required
             />
             <small className="help-text">Username should be at least 3 characters and only contain letters, numbers, and underscores.</small>
           </div>
           
           <div className="form-group">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="email">Email (optional)</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="Enter your email"
+              disabled={loading}
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="phone">Phone (optional)</label>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              value={formData.phone}
+              onChange={handleChange}
+              placeholder="Enter your phone number"
+              disabled={loading}
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="password">Password*</label>
             <input
               type="password"
               id="password"
@@ -194,6 +268,7 @@ const RegistrationForm = () => {
               onChange={handleChange}
               placeholder="Enter your password"
               disabled={loading}
+              required
             />
             <small className="help-text">Password should be at least 6 characters long.</small>
           </div>
@@ -206,6 +281,10 @@ const RegistrationForm = () => {
             {loading ? 'Registering...' : 'Register'}
           </button>
         </form>
+        
+        <div className="form-footer">
+          <p>Already have an account? <a href="/login">Login</a></p>
+        </div>
         
         {/* Debug info for troubleshooting */}
         {debugInfo && (
