@@ -46,7 +46,7 @@ export const humanizeText = async (text, aiScore = null) => {
       method: 'POST',
       headers,
       body: JSON.stringify({ 
-        input_text: text
+        input_text: text // This is the required field name in the API
       }),
       // Add timeout to avoid hanging requests
       signal: AbortSignal.timeout(15000)
@@ -73,7 +73,7 @@ export const humanizeText = async (text, aiScore = null) => {
     const data = await response.json();
     console.log('Humanization successful:', data);
     
-    // Return the humanized text
+    // Return the humanized text - look for the 'result' field which is what the FastAPI returns
     return {
       originalText: text,
       humanizedText: data.result || data.humanized_text || data.humanized || text,
@@ -211,17 +211,17 @@ export const getHumanizeStats = async () => {
  */
 export const isHumanizerAvailable = async () => {
   try {
-    // Try the direct API's health endpoint
-    const response = await fetch(`${HUMANIZER_API_URL.replace('/humanize_text', '')}/`, {
+    // Try the service root (removing the /humanize_text endpoint part)
+    const baseUrl = HUMANIZER_API_URL.includes('/humanize_text') 
+      ? HUMANIZER_API_URL.substring(0, HUMANIZER_API_URL.indexOf('/humanize_text')) 
+      : HUMANIZER_API_URL;
+    
+    const response = await fetch(baseUrl, {
       method: 'GET',
       signal: AbortSignal.timeout(5000)
     });
     
-    if (!response.ok) {
-      return false;
-    }
-    
-    return true;
+    return response.ok;
   } catch (error) {
     console.error('Humanizer health check failed:', error);
     return false;
