@@ -32,7 +32,14 @@ const RegistrationForm = () => {
     };
     
     checkHealth();
-  }, []);
+    
+    // Auto-clear messages after 5 seconds
+    const messageTimer = setTimeout(() => {
+      if (message) setMessage('');
+    }, 5000);
+    
+    return () => clearTimeout(messageTimer);
+  }, [message]);
 
   // Handle input change
   const handleChange = (e) => {
@@ -40,6 +47,25 @@ const RegistrationForm = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
+  };
+
+  // Password strength validation
+  const validatePassword = (password) => {
+    if (password.length < 6) {
+      return 'Password must be at least 6 characters long';
+    }
+    return null;
+  };
+
+  // Username validation
+  const validateUsername = (username) => {
+    if (username.length < 3) {
+      return 'Username must be at least 3 characters long';
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return 'Username can only contain letters, numbers, and underscores';
+    }
+    return null;
   };
 
   // Handle form submission
@@ -51,8 +77,16 @@ const RegistrationForm = () => {
     setDebugInfo(null);
 
     // Form validation
-    if (!formData.username || !formData.password) {
-      setError('Username and password are required');
+    const usernameError = validateUsername(formData.username);
+    if (usernameError) {
+      setError(usernameError);
+      setLoading(false);
+      return;
+    }
+
+    const passwordError = validatePassword(formData.password);
+    if (passwordError) {
+      setError(passwordError);
       setLoading(false);
       return;
     }
@@ -87,7 +121,13 @@ const RegistrationForm = () => {
       
       let errorMessage = 'Registration failed. Please try again.';
       
-      if (err.response) {
+      if (err.message.includes('already exists')) {
+        errorMessage = 'Username already exists. Please choose another username.';
+      } else if (err.message.includes('404')) {
+        errorMessage = 'Server endpoint not found. Please contact support.';
+      } else if (err.message.includes('Network Error') || err.message.includes('Failed to fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (err.response) {
         // Server responded with an error
         const status = err.response.status;
         const data = err.response.data;
@@ -141,6 +181,7 @@ const RegistrationForm = () => {
               placeholder="Enter your username"
               disabled={loading}
             />
+            <small className="help-text">Username should be at least 3 characters and only contain letters, numbers, and underscores.</small>
           </div>
           
           <div className="form-group">
@@ -154,6 +195,7 @@ const RegistrationForm = () => {
               placeholder="Enter your password"
               disabled={loading}
             />
+            <small className="help-text">Password should be at least 6 characters long.</small>
           </div>
           
           <button 
