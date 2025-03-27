@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { registerUser } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { registerUser, checkApiHealth } from '../services/api';
 import '../styles/RegistrationForm.css';
 
 const RegistrationForm = () => {
@@ -10,6 +10,28 @@ const RegistrationForm = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [apiStatus, setApiStatus] = useState(null);
+
+  // Check API health on component mount
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const health = await checkApiHealth();
+        setApiStatus({
+          status: 'connected',
+          details: health
+        });
+      } catch (err) {
+        console.error('API health check failed:', err);
+        setApiStatus({
+          status: 'disconnected',
+          error: err.message
+        });
+      }
+    };
+    
+    checkHealth();
+  }, []);
 
   // Handle input change
   const handleChange = (e) => {
@@ -34,12 +56,40 @@ const RegistrationForm = () => {
     }
 
     try {
+      console.log('Submitting registration for:', formData.username);
+      
       // Call the API service to register the user
       const response = await registerUser(formData);
       setMessage(`User ${response.username} registered successfully!`);
       setFormData({ username: '', password: '' });
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      console.error('Registration error caught in component:', err);
+      
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (err.response) {
+        // Server responded with an error
+        const status = err.response.status;
+        const data = err.response.data;
+        
+        if (status === 503) {
+          errorMessage = 'Database connection error. Please try again later.';
+        } else if (status === 409) {
+          errorMessage = 'Username already exists. Please choose another username.';
+        } else if (data && data.message) {
+          errorMessage = data.message;
+        }
+        
+        console.error('Server error details:', {
+          status,
+          data
+        });
+      } else if (err.request) {
+        // Request was made but no response received
+        errorMessage = 'Could not connect to the server. Please check your internet connection.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -49,6 +99,12 @@ const RegistrationForm = () => {
     <div className="registration-container">
       <div className="form-card">
         <h2>Create an Account</h2>
+        
+        {apiStatus && apiStatus.status === 'disconnected' && (
+          <div className="error-message">
+            API connection issue: {apiStatus.error}
+          </div>
+        )}
         
         {message && <div className="success-message">{message}</div>}
         {error && <div className="error-message">{error}</div>}
