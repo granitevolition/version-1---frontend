@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, NavLink } from 'react-router-dom';
 import { getCurrentUser, isLoggedIn, logoutUser, verifySession } from '../services/api';
 import '../styles/Dashboard.css';
 
@@ -154,20 +154,20 @@ const Dashboard = () => {
             <div className="panel-content">
               <p>Access our powerful AI text tools to enhance your content:</p>
               <div className="action-buttons">
-                <Link to="/humanize" className="feature-button">
+                <NavLink to="/humanize" className="feature-button">
                   <i className="feature-icon">✨</i>
                   <div className="feature-details">
                     <span className="feature-name">Humanize Text</span>
                     <span className="feature-description">Make AI-generated text sound more human</span>
                   </div>
-                </Link>
-                <Link to="/detect" className="feature-button">
+                </NavLink>
+                <NavLink to="/detect" className="feature-button">
                   <i className="feature-icon">🔍</i>
                   <div className="feature-details">
                     <span className="feature-name">AI Detector</span>
                     <span className="feature-description">Check if text will be flagged as AI-generated</span>
                   </div>
-                </Link>
+                </NavLink>
               </div>
             </div>
           </div>
