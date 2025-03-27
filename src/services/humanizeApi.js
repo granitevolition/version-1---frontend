@@ -5,6 +5,12 @@ import { isLoggedIn, getAuthHeader } from './api';
 
 // The backend API base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1';
+// The humanizer API URL (specific endpoint for humanizing text)
+const HUMANIZER_API_URL = process.env.REACT_APP_HUMANIZER_API_URL || 'https://web-production-3db6c.up.railway.app';
+
+// Console log the URLs being used (helpful for debugging)
+console.log('API Base URL:', API_BASE_URL);
+console.log('Humanizer API URL:', HUMANIZER_API_URL);
 
 /**
  * Humanize text by sending it to our backend proxy
@@ -18,6 +24,7 @@ export const humanizeText = async (text, aiScore = null) => {
   }
 
   try {
+    // For debugging - log the endpoint we're using
     console.log(`Sending text to humanize endpoint: ${API_BASE_URL}/humanize/humanize-text`);
     
     // Authentication headers
@@ -33,25 +40,61 @@ export const humanizeText = async (text, aiScore = null) => {
       }
     }
 
-    // Send the request to our backend proxy
-    const response = await fetch(`${API_BASE_URL}/humanize/humanize-text`, {
+    // First try the local backend endpoint
+    try {
+      // Send the request to our backend proxy
+      const response = await fetch(`${API_BASE_URL}/humanize/humanize-text`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ 
+          text,
+          aiScore
+        }),
+        // Add timeout to avoid hanging requests
+        signal: AbortSignal.timeout(10000)
+      });
+
+      // If successful, process the response
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Humanization successful (local backend):', data);
+        
+        // Return the humanized text
+        return {
+          originalText: text,
+          humanizedText: data.humanized || data.result || data.humanized_text || text,
+          message: 'Text successfully humanized!'
+        };
+      }
+      
+      // If local endpoint failed, we'll try the direct API
+      console.log('Local backend unavailable, trying direct API endpoint');
+    } catch (error) {
+      console.warn('Local backend humanize endpoint failed:', error);
+      // We'll continue to try the direct API endpoint
+    }
+
+    // Try the direct humanizer API as a fallback
+    console.log(`Trying direct API: ${HUMANIZER_API_URL}/humanize_text`);
+    
+    const directResponse = await fetch(`${HUMANIZER_API_URL}/humanize_text`, {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ 
-        text,
-        aiScore
+        text 
       }),
-      // Add timeout to avoid hanging requests
-      signal: AbortSignal.timeout(30000)
+      signal: AbortSignal.timeout(20000)
     });
 
     // Handle unsuccessful responses
-    if (!response.ok) {
+    if (!directResponse.ok) {
       // Try to parse the error response
-      let errorMessage = `Humanization failed: ${response.status} ${response.statusText}`;
+      let errorMessage = `Humanization failed: ${directResponse.status} ${directResponse.statusText}`;
       
       try {
-        const errorData = await response.json();
+        const errorData = await directResponse.json();
         if (errorData && errorData.message) {
           errorMessage = errorData.message;
         }
@@ -63,13 +106,13 @@ export const humanizeText = async (text, aiScore = null) => {
     }
 
     // Parse the successful response
-    const data = await response.json();
-    console.log('Humanization successful:', data);
+    const data = await directResponse.json();
+    console.log('Humanization successful (direct API):', data);
     
     // Return the humanized text
     return {
       originalText: text,
-      humanizedText: data.humanized || data.result || data.humanized_text || text,
+      humanizedText: data.humanized_text || data.result || data.humanized || text,
       message: 'Text successfully humanized!'
     };
   } catch (error) {
@@ -199,80 +242,44 @@ export const getHumanizeStats = async () => {
 };
 
 /**
- * Get history of humanizations for the current user
- * @param {number} page - Page number
- * @param {number} limit - Results per page
- * @returns {Promise<Object>} - Humanization history with pagination
- */
-export const getHumanizeHistory = async (page = 1, limit = 10) => {
-  try {
-    // Check if user is logged in
-    if (!isLoggedIn()) {
-      throw new Error('You must be logged in to view history');
-    }
-    
-    const headers = {
-      'Content-Type': 'application/json',
-      ...getAuthHeader()
-    };
-    
-    const response = await fetch(`${API_BASE_URL}/humanize/history?page=${page}&limit=${limit}`, {
-      method: 'GET',
-      headers,
-      // Add timeout to avoid hanging requests
-      signal: AbortSignal.timeout(10000)
-    });
-    
-    if (!response.ok) {
-      let errorMessage = `Failed to get history: ${response.status} ${response.statusText}`;
-      
-      try {
-        const errorData = await response.json();
-        if (errorData && errorData.message) {
-          errorMessage = errorData.message;
-        }
-      } catch (e) {
-        // If parsing fails, use the default error message
-      }
-      
-      throw new Error(errorMessage);
-    }
-    
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error getting humanize history:', error);
-    
-    // Provide more specific error messages
-    if (error.name === 'AbortError') {
-      throw new Error('Request timed out. Please try again later.');
-    }
-    
-    if (error.message === 'Failed to fetch') {
-      throw new Error('Network error: Unable to connect to the server. Please check your internet connection and try again.');
-    }
-    
-    throw error;
-  }
-};
-
-/**
  * Check if the humanizer service is available
  * @returns {Promise<boolean>} - True if available, false otherwise
  */
 export const isHumanizerAvailable = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/humanize/health`, {
+    // First try the local backend health endpoint
+    try {
+      const response = await fetch(`${API_BASE_URL}/humanize/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000)
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.status === 'healthy' || data.status === 'degraded';
+      }
+    } catch (error) {
+      console.warn('Local humanizer health check failed:', error);
+      // Continue to try the direct API
+    }
+    
+    // Try the direct API as a fallback
+    const directResponse = await fetch(`${HUMANIZER_API_URL}/health`, {
       method: 'GET',
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(3000)
     });
     
-    if (!response.ok) {
+    if (!directResponse.ok) {
       return false;
     }
     
-    const data = await response.json();
-    return data.status === 'healthy' || data.status === 'degraded';
+    try {
+      const data = await directResponse.json();
+      return data.status === 'success' || data.status === 'healthy';
+    } catch (e) {
+      // If we can't parse the response, at least the endpoint is responding
+      return directResponse.status === 200;
+    }
   } catch (error) {
     console.error('Humanizer health check failed:', error);
     return false;
