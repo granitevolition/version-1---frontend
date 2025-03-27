@@ -61,6 +61,28 @@ body {
   font-weight: normal;
 }
 
+/* Check status button */
+.check-status-button {
+  background-color: #ffc107;
+  color: #856404;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.check-status-button:hover {
+  background-color: #ffb300;
+}
+
+.check-status-button:disabled {
+  background-color: #ffe082;
+  cursor: not-allowed;
+}
+
 /* Card styles */
 .content-area {
   display: flex;
