@@ -5,12 +5,13 @@ import { isLoggedIn, getAuthHeader } from './api';
 
 // The backend API base URL
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://version-1-backend-production.up.railway.app/api/v1';
-// The humanizer API URL 
-const HUMANIZER_API_URL = process.env.REACT_APP_HUMANIZER_API_URL || 'https://web-production-3db6c.up.railway.app';
+
+// The direct humanizer API URL - include the full path with endpoint
+const DIRECT_HUMANIZER_API_URL = process.env.REACT_APP_HUMANIZER_API_URL || 'https://web-production-3db6c.up.railway.app/humanize_text';
 
 // Console log the URLs being used (helpful for debugging)
 console.log('API Base URL:', API_BASE_URL);
-console.log('Humanizer API URL:', HUMANIZER_API_URL);
+console.log('Direct Humanizer API URL:', DIRECT_HUMANIZER_API_URL);
 
 /**
  * Humanize text by sending it to the humanizer API
@@ -24,72 +25,79 @@ export const humanizeText = async (text, aiScore = null) => {
   }
 
   try {
-    // Try various endpoints since we're not sure of the exact structure
-    const endpoints = [
-      '/humanize_text',  // Standard endpoint
-      '',                // Base URL might already include the endpoint
-      '/api/humanize',   // Another possible endpoint
-      '/api/humanize_text' // Another possible endpoint
-    ];
+    console.log(`Sending text to humanize endpoint: ${DIRECT_HUMANIZER_API_URL}`);
     
-    let responseData = null;
-    let successfulEndpoint = '';
+    // Authentication headers
+    const headers = {
+      'Content-Type': 'application/json',
+    };
     
-    // Try each endpoint in order until one works
-    for (const endpoint of endpoints) {
-      const url = `${HUMANIZER_API_URL}${endpoint}`;
-      console.log(`Trying endpoint: ${url}`);
-      
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ text }),
-          signal: AbortSignal.timeout(8000) // Shorter timeout for each attempt
-        });
-        
-        if (response.ok) {
-          responseData = await response.json();
-          successfulEndpoint = endpoint;
-          console.log(`Success with endpoint: ${url}`);
-          break;
-        }
-      } catch (endpointError) {
-        console.warn(`Failed with endpoint ${endpoint}:`, endpointError.message);
-        // Continue to next endpoint
+    // Add auth token if user is logged in
+    if (isLoggedIn()) {
+      const authHeader = getAuthHeader();
+      if (authHeader) {
+        headers.Authorization = authHeader;
       }
     }
     
-    // If no endpoints worked
-    if (!responseData) {
-      throw new Error('Unable to connect to any humanizer endpoint. The service may be offline.');
+    // Send the request directly to the humanizer API
+    // Using the input_text field which is what the API expects
+    const response = await fetch(DIRECT_HUMANIZER_API_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ 
+        input_text: text  // This is the required format for the FastAPI endpoint
+      }),
+      // Add timeout to avoid hanging requests
+      signal: AbortSignal.timeout(15000)
+    });
+
+    // Handle unsuccessful responses
+    if (!response.ok) {
+      // Try to parse the error response
+      let errorMessage = `Humanization failed: ${response.status} ${response.statusText}`;
+      
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } catch (e) {
+        // If parsing fails, use the default error message
+      }
+      
+      throw new Error(errorMessage);
     }
+
+    // Parse the successful response
+    const data = await response.json();
+    console.log('Humanization successful:', data);
     
-    // Log the successful endpoint for future reference
-    console.log(`Humanization successful with endpoint: ${successfulEndpoint}`);
-    console.log('Response data:', responseData);
-    
-    // Extract humanized text from the response
-    // Handle different possible response formats
-    const humanizedText = 
-      responseData.humanized_text || 
-      responseData.result || 
-      responseData.humanized || 
-      responseData.text ||
-      text;
-    
+    // The FastAPI endpoint returns data in the "result" field
     return {
       originalText: text,
-      humanizedText: humanizedText,
+      humanizedText: data.result || text,
       message: 'Text successfully humanized!'
     };
   } catch (error) {
     console.error('Humanization error:', error);
     
-    // Provide specific error message
-    throw new Error('Server Error: Unable to humanize text. The server may be offline.');
+    // Provide more specific error messages
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out. Please try a shorter text or try again later.');
+    }
+    
+    if (error.message === 'Failed to fetch') {
+      throw new Error('Server Error: Unable to connect to the humanization service. The server may be offline.');
+    }
+    
+    // Look for specific error codes to give better messages
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      throw new Error('Server Error: Unable to connect to the humanization service. The server may be offline.');
+    }
+    
+    // Use original error if we don't have a more specific message
+    throw error;
   }
 };
 
@@ -203,35 +211,40 @@ export const getHumanizeStats = async () => {
  */
 export const isHumanizerAvailable = async () => {
   try {
-    // Try various health endpoints
-    const healthEndpoints = [
-      '/health',
-      '/api/health',
-      '/status',
-      '/api/status',
-      '' // Base URL as fallback
-    ];
+    // Extract the base URL (without the /humanize_text endpoint)
+    const baseUrl = DIRECT_HUMANIZER_API_URL.includes('/humanize_text') 
+      ? DIRECT_HUMANIZER_API_URL.substring(0, DIRECT_HUMANIZER_API_URL.indexOf('/humanize_text')) 
+      : DIRECT_HUMANIZER_API_URL;
     
-    for (const endpoint of healthEndpoints) {
-      try {
-        const response = await fetch(`${HUMANIZER_API_URL}${endpoint}`, {
-          method: 'GET',
-          signal: AbortSignal.timeout(3000)
-        });
-        
-        if (response.ok) {
-          console.log(`Humanizer service available at ${HUMANIZER_API_URL}${endpoint}`);
-          return true;
-        }
-      } catch (endpointError) {
-        console.warn(`Health check failed for endpoint ${endpoint}:`, endpointError.message);
-        // Continue to next endpoint
-      }
+    // Try the health endpoint first
+    const healthUrl = `${baseUrl}/health`;
+    console.log(`Checking humanizer health at: ${healthUrl}`);
+    
+    const response = await fetch(healthUrl, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (response.ok) {
+      return true;
     }
     
-    // If we get here, none of the health endpoints worked
-    console.error('All humanizer health check endpoints failed');
-    return false;
+    // If health check fails, try the endpoint directly
+    // Try a simple request to see if it responds at all
+    console.log(`Health check failed, trying direct endpoint check: ${DIRECT_HUMANIZER_API_URL}`);
+    
+    const directResponse = await fetch(DIRECT_HUMANIZER_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        input_text: 'test'
+      }),
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    return directResponse.ok;
   } catch (error) {
     console.error('Humanizer health check failed:', error);
     return false;
