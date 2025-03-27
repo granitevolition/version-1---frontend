@@ -1,13 +1,26 @@
 import axios from 'axios';
 
-// Get API base URL from environment variables
-const API_URL = process.env.REACT_APP_API_URL || 
-               // Try to guess URL based on Railway naming convention
-               (window.location.hostname.includes('frontend') ? 
-                 window.location.hostname.replace('frontend', 'backend') :
-                 'http://localhost:3000') + '/api';
+// Get the correct backend URL with proper protocol
+const getBackendUrl = () => {
+  // Use environment variable if available
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // For Railway, construct URL using the proper hostname with https protocol
+  if (window.location.hostname.includes('frontend')) {
+    const backendHostname = window.location.hostname.replace('frontend', 'backend');
+    return `https://${backendHostname}/api`;
+  }
+  
+  // Default for local development
+  return 'http://localhost:3000/api';
+};
 
-console.log('Frontend API URL:', API_URL);
+// Use the corrected URL
+const API_URL = getBackendUrl();
+
+console.log('BACKEND API URL:', API_URL);
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -53,9 +66,20 @@ api.interceptors.response.use(response => {
 export const testApiConnection = async () => {
   try {
     // Try the test endpoint
-    const response = await api.get('/test');
-    console.log('API test successful:', response.data);
-    return response.data;
+    const response = await fetch(`${API_URL}/test`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Status: ${response.status}, ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('API test successful:', data);
+    return data;
   } catch (error) {
     console.error('API test failed:', error);
     throw error;
@@ -69,9 +93,21 @@ export const testApiConnection = async () => {
  */
 export const testApiEcho = async (data) => {
   try {
-    const response = await api.post('/test/echo', data);
-    console.log('API echo successful:', response.data);
-    return response.data;
+    const response = await fetch(`${API_URL}/test/echo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Status: ${response.status}, ${response.statusText}`);
+    }
+    
+    const responseData = await response.json();
+    console.log('API echo successful:', responseData);
+    return responseData;
   } catch (error) {
     console.error('API echo failed:', error);
     throw error;
@@ -87,56 +123,25 @@ export const registerUser = async (userData) => {
   try {
     console.log('Sending registration request to:', `${API_URL}/users/register`);
     
-    // First, do a simple test to verify API connectivity
-    try {
-      await testApiConnection();
-      console.log('API connection verified, proceeding with registration');
-    } catch (testError) {
-      console.error('API connection test failed before registration:', testError);
-      // Continue with registration anyway
+    // Use fetch API for registration
+    const response = await fetch(`${API_URL}/users/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Status: ${response.status}, ${response.statusText}`);
     }
     
-    // Try direct fetch instead of axios
-    try {
-      console.log('Trying direct fetch for registration');
-      const fetchResponse = await fetch(`${API_URL}/users/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData),
-      });
-      
-      if (!fetchResponse.ok) {
-        throw new Error(`Fetch error: ${fetchResponse.status} ${fetchResponse.statusText}`);
-      }
-      
-      const data = await fetchResponse.json();
-      console.log('Registration with fetch successful:', data);
-      return data;
-    } catch (fetchError) {
-      console.error('Registration with fetch failed:', fetchError);
-      // Fall back to axios
-    }
-    
-    // Continue with axios
-    const response = await api.post('/users/register', userData);
-    console.log('Registration successful:', response.data);
-    return response.data;
+    const data = await response.json();
+    console.log('Registration successful:', data);
+    return data;
   } catch (error) {
-    // Log more detailed error information
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      console.error('Registration error status:', error.response.status);
-      console.error('Registration error data:', error.response.data);
-    } else if (error.request) {
-      // The request was made but no response was received
-      console.error('No response received:', error.request);
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      console.error('Request error:', error.message);
-    }
+    console.error('Registration error:', error);
     throw error;
   }
 };
@@ -147,10 +152,22 @@ export const registerUser = async (userData) => {
  */
 export const checkApiHealth = async () => {
   try {
-    const response = await api.get('/health');
-    return response.data;
+    const response = await fetch(`${API_URL}/health`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Status: ${response.status}, ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Health check successful:', data);
+    return data;
   } catch (error) {
-    console.error('API health check error:', error);
+    console.error('Health check error:', error);
     throw error;
   }
 };
