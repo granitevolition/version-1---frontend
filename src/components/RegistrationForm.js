@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { registerUser } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { registerUser, checkApiHealth } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import '../styles/RegistrationForm.css';
 
@@ -12,8 +12,57 @@ const RegistrationForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [apiStatus, setApiStatus] = useState({
+    status: 'checking',
+    message: 'Checking connection to server...'
+  });
   
   const navigate = useNavigate();
+
+  // Check API health on component mount
+  useEffect(() => {
+    const checkApiStatus = async () => {
+      try {
+        const health = await checkApiHealth();
+        console.log('Health check response:', health);
+        
+        // Check database status
+        const dbStatus = health.services?.database?.status || 'unknown';
+        
+        if (health.status === 'healthy') {
+          setApiStatus({
+            status: 'connected',
+            message: 'Connected to server'
+          });
+        } else if (health.status === 'degraded' && dbStatus === 'disconnected') {
+          setApiStatus({
+            status: 'warning',
+            message: 'Database service is unavailable. Registration might not work correctly.'
+          });
+        } else {
+          setApiStatus({
+            status: 'error',
+            message: 'Server is unavailable or experiencing issues'
+          });
+        }
+      } catch (error) {
+        console.error('API health check failed:', error);
+        setApiStatus({
+          status: 'error',
+          message: 'Could not connect to server'
+        });
+      }
+    };
+    
+    checkApiStatus();
+    
+    // Set up periodic health checks
+    const healthCheckInterval = setInterval(checkApiStatus, 30000); // Check every 30 seconds
+    
+    return () => {
+      clearInterval(healthCheckInterval);
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -66,7 +115,12 @@ const RegistrationForm = () => {
       
       // Delay before redirecting to login
       setTimeout(() => {
-        navigate('/login');
+        navigate('/login', { 
+          state: { 
+            registered: true, 
+            username: username 
+          } 
+        });
       }, 2000);
       
     } catch (error) {
@@ -79,6 +133,19 @@ const RegistrationForm = () => {
         setError('This email is already in use. Please use another email or try logging in.');
       } else if (error.message.includes('Network error')) {
         setError('Network error. Please check your connection and try again.');
+      } else if (error.message.includes('Database connection is not available')) {
+        setError('Registration service is currently unavailable. Please try again later.');
+        // Update API status to reflect database issue
+        setApiStatus({
+          status: 'warning',
+          message: 'Database service is unavailable. Registration might not work correctly.'
+        });
+      } else if (error.message.includes('Not Found')) {
+        setError('Registration endpoint not found. The server may be misconfigured.');
+        setApiStatus({
+          status: 'error',
+          message: 'Server is misconfigured or registration service is not available'
+        });
       } else {
         setError(error.message || 'Registration failed. Please try again.');
       }
@@ -87,10 +154,31 @@ const RegistrationForm = () => {
     }
   };
 
+  // Render a banner based on API status
+  const renderApiStatusBanner = () => {
+    if (apiStatus.status === 'connected') {
+      return null;
+    }
+    
+    return (
+      <div className={`api-status ${apiStatus.status}`}>
+        <strong>
+          {apiStatus.status === 'warning' ? '⚠️' : '❌'} {apiStatus.message}
+        </strong>
+        {apiStatus.status === 'error' && (
+          <p>The server may be down or experiencing issues. Registration might not work correctly.</p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="registration-container">
       <form className="registration-form" onSubmit={handleSubmit}>
         <h1>Create Account</h1>
+        
+        {/* API status banner */}
+        {renderApiStatusBanner()}
         
         {error && <div className="error-message">{error}</div>}
         {successMessage && <div className="success-message">{successMessage}</div>}
@@ -159,7 +247,7 @@ const RegistrationForm = () => {
         <button 
           type="submit" 
           className="register-button"
-          disabled={isLoading}
+          disabled={isLoading || apiStatus.status === 'checking'}
         >
           {isLoading ? 'Creating Account...' : 'Create Account'}
         </button>
@@ -168,6 +256,18 @@ const RegistrationForm = () => {
           Already have an account? <a href="/login">Login here</a>
         </div>
       </form>
+      
+      {/* Debugging info - hidden in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="debug-info">
+          <h3>Debug Information</h3>
+          <pre>
+            API URL: {process.env.REACT_APP_API_URL || 'http://localhost:5000/api/v1'} <br />
+            API Status: {apiStatus.status} <br />
+            Environment: {process.env.NODE_ENV}
+          </pre>
+        </div>
+      )}
     </div>
   );
 };
