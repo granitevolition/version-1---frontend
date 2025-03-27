@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { humanizeText, detectAiContent, isHumanizerAvailable } from '../services/humanizeApi';
-import { isLoggedIn } from '../services/api';
+import { isLoggedIn, isApiAvailable } from '../services/api';
 import '../styles/HumanizeText.css';
 
 const HumanizeText = () => {
   const [originalText, setOriginalText] = useState('');
   const [humanizedText, setHumanizedText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [serviceAvailable, setServiceAvailable] = useState(true);
+  const [serviceStatus, setServiceStatus] = useState({
+    humanizer: { status: 'checking', message: 'Checking service...' },
+    api: { status: 'checking', message: 'Checking API...' }
+  });
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [aiScore, setAiScore] = useState(null);
@@ -25,17 +28,54 @@ const HumanizeText = () => {
           return;
         }
       
-        // Check if the service is available
-        const available = await isHumanizerAvailable();
-        setServiceAvailable(available);
+        // Check API availability
+        try {
+          const apiAvailable = await isApiAvailable();
+          setServiceStatus(prev => ({
+            ...prev,
+            api: {
+              status: apiAvailable ? 'available' : 'unavailable',
+              message: apiAvailable ? 'API connected' : 'API unavailable'
+            }
+          }));
+        } catch (apiErr) {
+          console.error('API availability check failed:', apiErr);
+          setServiceStatus(prev => ({
+            ...prev,
+            api: { 
+              status: 'error', 
+              message: 'Cannot connect to API' 
+            }
+          }));
+        }
         
-        if (!available) {
-          setError('Humanization service is currently unavailable. Basic features will still work, but AI detection may not be accurate.');
+        // Check the humanizer service availability
+        try {
+          const available = await isHumanizerAvailable();
+          setServiceStatus(prev => ({
+            ...prev,
+            humanizer: {
+              status: available ? 'available' : 'unavailable',
+              message: available ? 'Humanizer service connected' : 'Humanizer service unavailable'
+            }
+          }));
+          
+          if (!available) {
+            setMessage('Humanization service is currently in fallback mode. Basic features will still work, but results may be less effective.');
+          }
+        } catch (err) {
+          console.error('Service availability check failed:', err);
+          setServiceStatus(prev => ({
+            ...prev,
+            humanizer: { 
+              status: 'error', 
+              message: 'Cannot connect to humanizer' 
+            }
+          }));
+          setMessage('Connection to humanization service could not be established. Using fallback mode.');
         }
       } catch (err) {
-        console.error('Service availability check failed:', err);
-        setServiceAvailable(false);
-        setError('Connection to humanization service could not be established. You can still use basic features.');
+        console.error('Initialization error:', err);
       }
     };
 
@@ -50,7 +90,7 @@ const HumanizeText = () => {
     if (humanizedText) {
       setHumanizedText('');
     }
-    if (message) {
+    if (message && !message.includes('fallback mode')) {
       setMessage('');
     }
     if (error) {
@@ -73,12 +113,16 @@ const HumanizeText = () => {
     
     setLoading(true);
     setError('');
-    setMessage('');
+    if (!message.includes('fallback mode')) {
+      setMessage('');
+    }
 
     try {
       // First, detect if the text appears to be AI-generated
       try {
+        console.log('Detecting AI content...');
         const detection = await detectAiContent(originalText);
+        console.log('AI detection result:', detection);
         setAiScore(detection);
         setShowAiScore(true);
       } catch (detectionErr) {
@@ -88,13 +132,20 @@ const HumanizeText = () => {
       
       // Then humanize the text
       try {
+        console.log('Sending text to humanizer...');
         const result = await humanizeText(originalText, aiScore);
+        console.log('Humanization successful');
         
         setHumanizedText(result.humanizedText);
-        setMessage(result.message);
+        if (!message.includes('fallback mode')) {
+          setMessage(result.message);
+        }
       } catch (humanizeErr) {
+        console.error('Humanization error:', humanizeErr);
+        
         if (humanizeErr.message.includes('Network error') || humanizeErr.message.includes('Failed to fetch')) {
           // For network errors, use local humanization as fallback
+          console.log('Using fallback humanization...');
           setHumanizedText(fallbackHumanize(originalText));
           setMessage('Text humanized using fallback method (server unavailable). For best results, try again later.');
         } else {
@@ -135,7 +186,7 @@ const HumanizeText = () => {
     const element = document.createElement('a');
     const file = new Blob([humanizedText], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = 'humanized-text.txt';
+    element.download = 'andikar-humanized-text.txt';
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -144,14 +195,23 @@ const HumanizeText = () => {
   return (
     <div className="humanize-container">
       <div className="humanize-card">
-        <h1>Humanize AI-generated Text</h1>
+        <h1>Andikar AI Text Humanizer</h1>
         <p className="humanize-description">
           Transform AI-generated content into natural, human-like text that bypasses AI detection.
         </p>
 
-        {!serviceAvailable && (
+        <div className="service-status-bar">
+          <div className={`service-indicator ${serviceStatus.api.status}`}>
+            API: {serviceStatus.api.status === 'available' ? 'Online' : 'Offline'}
+          </div>
+          <div className={`service-indicator ${serviceStatus.humanizer.status}`}>
+            Humanizer: {serviceStatus.humanizer.status === 'available' ? 'Online' : 'Fallback Mode'}
+          </div>
+        </div>
+
+        {serviceStatus.humanizer.status !== 'available' && (
           <div className="warning-message">
-            <strong>Limited Functionality:</strong> The humanization service is currently operating in offline mode. Some features may be limited.
+            <strong>Using Fallback Mode:</strong> The humanization service is currently operating with reduced capabilities. Results may be less effective.
           </div>
         )}
 
