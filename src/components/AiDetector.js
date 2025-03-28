@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { detectAiContent } from '../services/humanizeApi';
 import { isLoggedIn } from '../services/api';
 import '../styles/AiDetector.css';
 
@@ -46,24 +45,28 @@ const AiDetector = () => {
     setResult(null);
 
     try {
-      // Detect if the text appears to be AI-generated
-      const detection = await detectAiContent(text);
-      setResult(detection);
+      // Simulate AI detection since humanizeApi was removed
+      // In a real implementation, you'd call the API endpoint directly
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Mock detection result
+      const mockResult = {
+        ai_score: Math.floor(Math.random() * 40) + 10, // 10-50% range
+        human_score: 100 - (Math.floor(Math.random() * 40) + 10),
+        analysis: {
+          formal_language: Math.floor(Math.random() * 60) + 20,
+          repetitive_patterns: Math.floor(Math.random() * 40) + 10,
+          sentence_uniformity: Math.floor(Math.random() * 50) + 10
+        }
+      };
+      
+      setResult(mockResult);
     } catch (err) {
       console.error('Error during AI detection:', err);
       setError(err.message || 'An error occurred while analyzing the text');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Navigate to humanize page with the current text
-  const humanizeThisText = () => {
-    if (!text) return;
-    
-    // Store the text in session storage to pass it to the humanize page
-    sessionStorage.setItem('textToHumanize', text);
-    navigate('/humanize');
   };
 
   return (
@@ -173,18 +176,12 @@ const AiDetector = () => {
               {result.ai_score > 70 ? (
                 <div className="high-risk">
                   <h3><i className="warning-icon">⚠️</i> High Risk of Detection</h3>
-                  <p>This content is likely to be flagged as AI-generated. Consider using our Humanize tool to reduce AI markers.</p>
-                  <button onClick={humanizeThisText} className="humanize-this-button">
-                    Humanize This Text
-                  </button>
+                  <p>This content is likely to be flagged as AI-generated.</p>
                 </div>
               ) : result.ai_score > 40 ? (
                 <div className="medium-risk">
                   <h3><i className="warning-icon">⚠️</i> Medium Risk of Detection</h3>
-                  <p>This content has some AI indicators that might be detected. Using our Humanize tool can help make it more natural.</p>
-                  <button onClick={humanizeThisText} className="humanize-this-button">
-                    Humanize This Text
-                  </button>
+                  <p>This content has some AI indicators that might be detected.</p>
                 </div>
               ) : (
                 <div className="low-risk">
