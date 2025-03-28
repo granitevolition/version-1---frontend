@@ -1,68 +1,89 @@
-# Andikar AI Frontend
+# Version 1 Frontend Application
 
-This repository contains the frontend code for the Andikar AI text humanizer application. The frontend allows users to register, login, and use the humanizing feature to transform AI-generated text into more human-like text.
+Frontend interface for user registration system.
 
-## Recent Fixes
+## Getting Started
 
-- **Fixed Dashboard Humanizing Text Box**: Fixed the main issue where the text box for humanizing content wasn't displaying properly on the dashboard.
-- **Corrected API Endpoints**: Updated the application to use the correct backend and humanizer API endpoints.
-- **Fixed Environment Configuration**: Added proper environment variables with the correct URLs for production deployment.
-- **Enhanced Error Handling**: Improved error messages when services are unavailable.
-- **Simplified API Integration**: Updated the humanizeApi.js to directly use the humanizer service.
+### Prerequisites
+- Node.js (v16 or newer)
+- npm or yarn
+- Backend API service running at the configured endpoint
 
-## Environment Configuration
+### Installation
 
-The application uses the following environment variables:
-
-- `REACT_APP_API_URL`: URL for the backend API (default: https://version-1-backend-production.up.railway.app/api/v1)
-- `REACT_APP_HUMANIZER_API_URL`: URL for the humanizer API (default: https://web-production-3db6c.up.railway.app)
-
-## Available Features
-
-- **User Authentication**: Register and login to access the application
-- **Text Humanizing**: Convert AI-generated text to more human-like text
-- **User Dashboard**: View profile information and access the text humanizer
-- **Service Status Indicators**: Visual indicators for backend service availability
-
-## Key Components
-
-- **Dashboard.js**: Main user interface after login, contains the humanizing feature
-- **LoginForm.js**: User login interface
-- **RegistrationForm.js**: New user registration interface
-- **HumanizeText.js**: Dedicated page for text humanization (also available directly on Dashboard)
-- **AiDetector.js**: Simple AI text detection
-
-## API Integration
-
-The frontend integrates with two main APIs:
-
-1. **Backend API**: Handles authentication, user management, and proxies humanization requests
-2. **Humanizer API**: Directly processes text humanization requests
-
-## Troubleshooting
-
-If the humanizer text box doesn't display:
-- Check browser console for errors
-- Verify the REACT_APP_API_URL and REACT_APP_HUMANIZER_API_URL are correct in .env
-- Make sure you're logged in (the dashboard requires authentication)
-- Check network tab in developer tools to see if API calls are working
-- If backend is unavailable, the UI will show a warning banner
-
-## Development
-
-To run the application locally:
-
+1. Clone the repository:
 ```bash
-# Install dependencies
-npm install
+git clone https://github.com/granitevolition/version-1---frontend.git
+cd version-1---frontend
+```
 
-# Start development server
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Set up environment variables:
+- Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+- Update the variables in the `.env` file to match your environment.
+
+### Development
+
+Run the development server:
+```bash
 npm start
 ```
 
+The application will be available at `http://localhost:3000`.
+
 ## Deployment
 
-The application is deployed on Railway. To deploy updates:
+### Deploying to Railway
 
-1. Commit and push changes to GitHub
-2. Railway will automatically deploy the updated code
+The application can be deployed to Railway using the following steps:
+
+1. Push your code to GitHub
+2. Connect your Railway project to your GitHub repository
+3. Set the required environment variables in the Railway project settings
+4. Railway will automatically deploy your application
+
+Manually trigger a deployment:
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login to Railway
+railway login
+
+# Link to your project
+railway link
+
+# Deploy your project
+railway up
+```
+
+### Environment Variables
+
+Create a `.env` file with the following variables:
+
+```
+REACT_APP_API_URL=http://localhost:5000/api/v1
+```
+
+For production, set these in your Railway project settings.
+
+## Available Features
+
+- User Authentication (Login/Registration)
+- User Dashboard
+- AI Content Detection
+- Connectivity Testing
+
+## Recent Changes
+
+- Removed Humanize functionality
+- Updated AI Detector to work independently
+- Improved error handling and status reporting
+
