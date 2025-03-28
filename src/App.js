@@ -3,9 +3,6 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import RegistrationForm from './components/RegistrationForm';
 import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
-import HumanizeText from './components/HumanizeText';
-import AiDetector from './components/AiDetector';
-import HumanizeDebug from './components/HumanizeDebug';
 import TestConnectivity from './components/TestConnectivity';
 import './styles/App.css';
 
@@ -14,7 +11,7 @@ function App() {
     <Router>
       <div className="App">
         <header className="App-header">
-          <h1>Andikar AI</h1>
+          <h1>User Registration System</h1>
         </header>
         <main>
           <Routes>
@@ -22,14 +19,11 @@ function App() {
             <Route path="/register" element={<RegistrationForm />} />
             <Route path="/login" element={<LoginForm />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/humanize" element={<HumanizeText />} />
-            <Route path="/ai-detector" element={<AiDetector />} />
-            <Route path="/debug" element={<HumanizeDebug />} />
             <Route path="/test-connectivity" element={<TestConnectivity />} />
           </Routes>
         </main>
         <footer>
-          &copy; {new Date().getFullYear()} Andikar AI. All rights reserved.
+          &copy; {new Date().getFullYear()} All rights reserved.
         </footer>
       </div>
     </Router>
