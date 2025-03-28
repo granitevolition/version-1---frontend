@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { isApiAvailable, checkApiHealth } from '../services/api';
-import { isHumanizerAvailable } from '../services/humanizeApi';
 
 const TestConnectivity = () => {
   const [apiStatus, setApiStatus] = useState({ status: 'checking', message: 'Checking connection...' });
-  const [humanizerStatus, setHumanizerStatus] = useState({ status: 'checking', message: 'Checking connection...' });
   const [healthResult, setHealthResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -24,29 +22,6 @@ const TestConnectivity = () => {
       console.error('API test failed:', err);
       setError(`API test failed: ${err.message}`);
       setApiStatus({
-        status: 'error',
-        message: `Error: ${err.message}`
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runHumanizerTest = async () => {
-    setLoading(true);
-    setError(null);
-    setHumanizerStatus({ status: 'checking', message: 'Testing connection...' });
-    
-    try {
-      const available = await isHumanizerAvailable();
-      setHumanizerStatus({
-        status: available ? 'available' : 'unavailable',
-        message: available ? 'Humanizer API is connected' : 'Humanizer API is not responding'
-      });
-    } catch (err) {
-      console.error('Humanizer test failed:', err);
-      setError(`Humanizer test failed: ${err.message}`);
-      setHumanizerStatus({
         status: 'error',
         message: `Error: ${err.message}`
       });
@@ -75,7 +50,6 @@ const TestConnectivity = () => {
     // Run the health check on component mount
     runHealthCheck();
     runApiTest();
-    runHumanizerTest();
   }, []);
 
   // Helper for status colors
@@ -124,32 +98,6 @@ const TestConnectivity = () => {
             style={{ padding: '8px 16px', marginRight: '10px' }}
           >
             {loading ? 'Testing...' : 'Test API Connection'}
-          </button>
-        </div>
-        
-        <div style={{ 
-          flex: 1, 
-          padding: '15px', 
-          borderRadius: '4px', 
-          border: '1px solid #ddd',
-          background: '#f9f9f9'
-        }}>
-          <h2>Humanizer API</h2>
-          <div style={{
-            padding: '10px',
-            background: getStatusColor(humanizerStatus.status) + '22',
-            borderLeft: `4px solid ${getStatusColor(humanizerStatus.status)}`,
-            marginBottom: '10px'
-          }}>
-            <p><strong>Status:</strong> {humanizerStatus.status}</p>
-            <p>{humanizerStatus.message}</p>
-          </div>
-          <button 
-            onClick={runHumanizerTest}
-            disabled={loading}
-            style={{ padding: '8px 16px', marginRight: '10px' }}
-          >
-            {loading ? 'Testing...' : 'Test Humanizer Connection'}
           </button>
         </div>
       </div>
