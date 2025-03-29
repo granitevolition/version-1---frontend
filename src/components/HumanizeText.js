@@ -127,8 +127,9 @@ const HumanizeText = () => {
     
     try {
       const possibleEndpoints = [
-        '/api/v1/humanize/test',  // Standard API path
-        '/humanize/test',         // Without api/v1 prefix
+        '/api/v1/diagnostic/direct-api-test',  // Standard API path
+        '/diagnostic/direct-api-test',         // Without api/v1 prefix
+        '/diag/direct-api-test',               // Short alias
       ];
       
       let response;
@@ -136,9 +137,7 @@ const HumanizeText = () => {
       
       for (const endpoint of possibleEndpoints) {
         try {
-          response = await apiClient.post(endpoint, {
-            text: "This is a test of the humanization API."
-          });
+          response = await apiClient.get(endpoint);
           console.log(`Test API succeeded on ${endpoint}`);
           break;
         } catch (err) {
@@ -153,9 +152,21 @@ const HumanizeText = () => {
       
       setTestResult({
         success: true,
-        message: "API connection test successful",
+        message: "API connection test completed",
         data: response.data
       });
+
+      // If any of the API test approaches succeeded, show a message
+      if (response.data && response.data.results) {
+        const successfulApproach = response.data.results.find(r => r.success && !r.isHtml);
+        if (successfulApproach) {
+          setTestResult(prev => ({
+            ...prev,
+            successfulApproach: successfulApproach.attempt,
+            message: `API connection successful using "${successfulApproach.attempt}" approach`
+          }));
+        }
+      }
     } catch (error) {
       console.error("API test failed:", error);
       setTestResult({
@@ -312,7 +323,14 @@ const HumanizeText = () => {
       
       setHumanizedText(''); // Clear any partial results
       
-      if (error.response) {
+      // If there's a specific HTML detection
+      if (error.message && error.message.includes('HTML page')) {
+        setError(
+          'The external humanization service is currently unavailable. ' +
+          'This is likely a temporary issue with the service. ' +
+          'Please try again later or contact support if the problem persists.'
+        );
+      } else if (error.response) {
         console.error('Error response:', error.response.data);
         setDebugInfo(error.response.data);
         
@@ -364,7 +382,14 @@ const HumanizeText = () => {
       {testResult && (
         <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
           <p>{testResult.message}</p>
-          {testResult.success && <p>The API is responding correctly.</p>}
+          {testResult.success && (
+            <>
+              <p>The API connection test has completed. {testResult.successfulApproach && 
+                `A successful connection was made using the "${testResult.successfulApproach}" approach.`}</p>
+              {!testResult.successfulApproach && 
+                <p className="warning">However, no approach was able to get a proper response from the humanization API.</p>}
+            </>
+          )}
           {!testResult.success && <p>Error: {testResult.error}</p>}
         </div>
       )}
@@ -385,7 +410,17 @@ const HumanizeText = () => {
         </div>
       </div>
       
-      {error && <div className="error-message">{error}</div>}
+      {error && (
+        <div className="error-message">
+          <p>{error}</p>
+          {error.includes('HTML page') && (
+            <p className="error-detail">
+              This could indicate that the external API is down or not accessible from our server. 
+              The administrators have been notified about this issue.
+            </p>
+          )}
+        </div>
+      )}
       
       <button 
         onClick={handleHumanize} 
@@ -431,8 +466,8 @@ const HumanizeText = () => {
         </div>
       )}
       
-      {/* Debug section - only visible during development */}
-      {debugInfo && process.env.NODE_ENV === 'development' && (
+      {/* Debug section */}
+      {debugInfo && (
         <div className="debug-section">
           <h4>Debug Information:</h4>
           <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
