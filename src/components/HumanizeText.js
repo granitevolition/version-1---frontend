@@ -3,80 +3,6 @@ import axios from 'axios';
 import '../styles/HumanizeText.css';
 
 /**
- * Locally humanizes text (frontend fallback)
- * @param {string} text - Text to humanize
- * @returns {string} - Humanized text
- */
-function localHumanize(text) {
-  if (!text || typeof text !== 'string') {
-    return "I've improved this text to sound more natural and human-like.";
-  }
-
-  // Break text into sentences - preserving the punctuation
-  const sentencePattern = /([^.!?]+[.!?]+)/g;
-  const sentences = text.match(sentencePattern) || [text];
-  
-  if (sentences.length === 0) return text;
-
-  // Copy sentences for modification
-  let resultSentences = [...sentences];
-  
-  // First-pass transformations: Add conversational elements
-  if (sentences.length > 0) {
-    // Transform the first sentence
-    const firstSentence = sentences[0].trim();
-    const firstSentenceStarters = [
-      "Picture this: ",
-      "Imagine a world where ",
-      "Let me tell you about ",
-      "Here's something fascinating: ",
-    ];
-    const starter = firstSentenceStarters[Math.floor(Math.random() * firstSentenceStarters.length)];
-    resultSentences[0] = starter + firstSentence.charAt(0).toLowerCase() + firstSentence.slice(1);
-    
-    // Transform the last sentence if there are multiple sentences
-    if (sentences.length > 1) {
-      const lastIndex = sentences.length - 1;
-      const lastSentence = sentences[lastIndex].trim();
-      const lastSentenceEnders = [
-        lastSentence + " Quite a captivating tale, isn't it?",
-        lastSentence + " I find that really intriguing.",
-        lastSentence + " That's the kind of story that captures your imagination."
-      ];
-      resultSentences[lastIndex] = lastSentenceEnders[Math.floor(Math.random() * lastSentenceEnders.length)];
-    }
-    
-    // Transform a middle sentence if there are at least 3 sentences
-    if (sentences.length >= 3) {
-      const midIndex = Math.floor(sentences.length / 2);
-      const midSentence = sentences[midIndex].trim();
-      const midSentenceTransformers = [
-        "I particularly enjoy how " + midSentence.charAt(0).toLowerCase() + midSentence.slice(1),
-        "What's fascinating is that " + midSentence.charAt(0).toLowerCase() + midSentence.slice(1),
-        "You know what's interesting? " + midSentence
-      ];
-      resultSentences[midIndex] = midSentenceTransformers[Math.floor(Math.random() * midSentenceTransformers.length)];
-    }
-  }
-
-  // Join sentences and apply contractions
-  let result = resultSentences.join(' ')
-    .replace(/it is/g, "it's")
-    .replace(/that is/g, "that's")
-    .replace(/there is/g, "there's")
-    .replace(/he is/g, "he's")
-    .replace(/she is/g, "she's")
-    .replace(/very important/g, "crucial")
-    .replace(/in order to/g, "to")
-    .replace(/a lot of/g, "many")
-    .replace(/utilize/g, "use")
-    .replace(/nevertheless/g, "even so")
-    .replace(/subsequently/g, "later");
-  
-  return result;
-}
-
-/**
  * Sanitizes potential HTML content to plain text
  * @param {string} text - Text that might contain HTML
  * @returns {string} - Plain text without HTML tags
@@ -127,40 +53,6 @@ const isErrorPage = (text) => {
   return errorIndicators.some(indicator => 
     text.toLowerCase().includes(indicator.toLowerCase())
   );
-};
-
-/**
- * Checks if humanized text is too similar to original
- * @param {string} original - Original text
- * @param {string} humanized - Humanized text
- * @returns {boolean} - True if texts are too similar
- */
-const isTooSimilar = (original, humanized) => {
-  if (!original || !humanized) return false;
-  
-  // If it starts with the marker phrase from our fallback, it's already processed
-  if (humanized.includes("I've made this text") || 
-      humanized.includes("Picture this") ||
-      humanized.includes("Imagine a world")) {
-    return false;
-  }
-  
-  // Remove all whitespace for comparison
-  const cleanOriginal = original.replace(/\s+/g, '');
-  const cleanHumanized = humanized.replace(/\s+/g, '');
-  
-  // If they're exactly the same, they're too similar
-  if (cleanOriginal === cleanHumanized) return true;
-  
-  // If they're more than 90% similar, they're too similar
-  const maxLength = Math.max(cleanOriginal.length, cleanHumanized.length);
-  let sameChars = 0;
-  
-  for (let i = 0; i < Math.min(cleanOriginal.length, cleanHumanized.length); i++) {
-    if (cleanOriginal[i] === cleanHumanized[i]) sameChars++;
-  }
-  
-  return (sameChars / maxLength) > 0.9;
 };
 
 const HumanizeText = () => {
@@ -284,60 +176,29 @@ const HumanizeText = () => {
       setDebugInfo(response.data);
       
       // Process the response data
-      let processedText = '';
-      
-      if (response.data) {
+      if (response.data && response.data.success) {
         // Backend should return humanizedContent directly 
         if (response.data.humanizedContent) {
-          processedText = response.data.humanizedContent;
-        } 
-        // Handle direct response string
-        else if (typeof response.data === 'string') {
-          processedText = response.data;
-        }
-        // Unknown format - attempt to extract something useful
-        else {
-          console.warn('Unexpected response format:', response.data);
-          // Try to extract text from any property that might contain it
-          const possibleTextProps = ['text', 'result', 'content', 'output', 'humanized'];
-          for (const prop of possibleTextProps) {
-            if (response.data[prop] && typeof response.data[prop] === 'string') {
-              processedText = response.data[prop];
-              break;
-            }
+          const processedText = sanitizeHtml(response.data.humanizedContent);
+          
+          // Check for HTML content or error pages
+          if (isErrorPage(processedText)) {
+            throw new Error('Received error page from server');
           }
-        }
-        
-        // Sanitize the text if it's HTML or contains HTML
-        processedText = sanitizeHtml(processedText);
-        
-        // Final check for error page content
-        if (isErrorPage(processedText)) {
-          console.warn('Detected error page in response, using fallback humanization');
-          processedText = localHumanize(inputText);
-        }
-        
-        // Check if the response is too similar to the original text
-        if (isTooSimilar(inputText, processedText)) {
-          console.warn('Response too similar to original text, using fallback humanization');
-          processedText = localHumanize(inputText);
-        }
-        
-        // If we still don't have useful text, use the local humanizer
-        if (!processedText || processedText.length < 20) {
-          console.warn('Response too short or empty, using fallback humanization');
-          processedText = localHumanize(inputText);
+          
+          setHumanizedText(processedText);
+          setOriginalText(response.data.originalContent || inputText);
+        } else {
+          throw new Error('Response missing humanized content');
         }
       } else {
-        // Empty response
-        processedText = localHumanize(inputText);
+        // Unexpected response format
+        throw new Error('Invalid response format from server');
       }
-      
-      // Set the humanized text
-      setHumanizedText(processedText);
-      
     } catch (error) {
       console.error('Humanize error:', error);
+      
+      setHumanizedText(''); // Clear any partial results
       
       if (error.response) {
         console.error('Error response:', error.response.data);
@@ -345,10 +206,10 @@ const HumanizeText = () => {
         
         if (error.response.status === 401) {
           setError('Authentication required. Please log in again.');
-          // Optionally redirect to login
-          // window.location.href = '/login';
         } else if (error.response.status === 403) {
           setError('You do not have permission to use this feature.');
+        } else if (error.response.status === 503) {
+          setError('Humanization service is temporarily unavailable. Please try again later.');
         } else if (error.response.data && error.response.data.error) {
           setError(error.response.data.error);
         } else {
@@ -357,11 +218,8 @@ const HumanizeText = () => {
       } else if (error.request) {
         setError('No response received from server. Please check your internet connection.');
       } else {
-        setError(`Error: ${error.message}`);
+        setError(`Error: ${error.message || 'Unknown error occurred'}`);
       }
-      
-      // In case of error, still provide humanized text using local fallback
-      setHumanizedText(localHumanize(inputText));
     } finally {
       setLoading(false);
     }
