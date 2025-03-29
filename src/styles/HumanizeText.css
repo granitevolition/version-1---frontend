@@ -45,6 +45,10 @@ textarea {
   font-weight: bold;
 }
 
+.humanize-button:hover {
+  background-color: #4cae4c;
+}
+
 button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
@@ -77,6 +81,10 @@ button:disabled {
   cursor: pointer;
 }
 
+.copy-button:hover {
+  background-color: #286090;
+}
+
 .tier-info {
   background-color: #f5f5f5;
   padding: 10px;
@@ -85,7 +93,7 @@ button:disabled {
   border-left: 4px solid #5bc0de;
 }
 
-/* New styles for comparison view */
+/* Styles for comparison view */
 .comparison-container {
   margin-top: 30px;
   padding: 15px;
@@ -124,10 +132,34 @@ button:disabled {
   overflow-y: auto;
 }
 
+/* Debug section */
+.debug-section {
+  margin-top: 30px;
+  padding: 15px;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  background-color: #fff3cd;
+}
+
+.debug-section pre {
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-family: monospace;
+  font-size: 0.9em;
+  border: 1px solid #e9ecef;
+}
+
 /* Make sure the design is responsive */
 @media (max-width: 768px) {
   .comparison-grid {
     grid-template-columns: 1fr;
     gap: 15px;
+  }
+  
+  .humanize-container {
+    padding: 10px;
   }
 }
