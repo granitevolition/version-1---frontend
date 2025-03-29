@@ -27,34 +27,6 @@ const sanitizeHtml = (text) => {
   return text;
 };
 
-/**
- * Detects if the text looks like an error message or page
- * @param {string} text - Text to check
- * @returns {boolean} - True if it looks like an error
- */
-const isErrorPage = (text) => {
-  if (!text || typeof text !== 'string') return false;
-  
-  const errorIndicators = [
-    'You need to enable JavaScript',
-    '<!doctype html>',
-    '<html',
-    '<body>',
-    'Error',
-    '404',
-    '500',
-    'Not Found',
-    'Internal Server Error',
-    'JavaScript is required',
-    'enable JavaScript',
-    'User Registration'
-  ];
-  
-  return errorIndicators.some(indicator => 
-    text.toLowerCase().includes(indicator.toLowerCase())
-  );
-};
-
 const HumanizeText = () => {
   const [inputText, setInputText] = useState('');
   const [humanizedText, setHumanizedText] = useState('');
@@ -65,6 +37,7 @@ const HumanizeText = () => {
   const [userTier, setUserTier] = useState('free');
   const [wordLimit, setWordLimit] = useState(500);
   const [debugInfo, setDebugInfo] = useState(null);
+  const [testResult, setTestResult] = useState(null);
 
   // Word limits by tier
   const WORD_LIMITS = {
@@ -80,7 +53,7 @@ const HumanizeText = () => {
       'Content-Type': 'application/json',
       'Accept': 'application/json, text/plain'
     },
-    timeout: 15000 // 15 second timeout
+    timeout: 20000 // 20 second timeout - longer to accommodate API delays
   });
 
   // Add authorization token to requests
@@ -117,6 +90,54 @@ const HumanizeText = () => {
     const count = inputText.trim() ? inputText.trim().split(/\s+/).length : 0;
     setWordCount(count);
   }, [inputText]);
+  
+  // Test the API connection
+  const testApiConnection = async () => {
+    setTestResult(null);
+    setLoading(true);
+    
+    try {
+      const possibleEndpoints = [
+        '/api/v1/humanize/test',  // Standard API path
+        '/humanize/test',         // Without api/v1 prefix
+      ];
+      
+      let response;
+      let lastError;
+      
+      for (const endpoint of possibleEndpoints) {
+        try {
+          response = await apiClient.post(endpoint, {
+            text: "This is a test of the humanization API."
+          });
+          console.log(`Test API succeeded on ${endpoint}`);
+          break;
+        } catch (err) {
+          console.warn(`Test endpoint ${endpoint} failed:`, err.message);
+          lastError = err;
+        }
+      }
+      
+      if (!response) {
+        throw lastError || new Error("All test endpoints failed");
+      }
+      
+      setTestResult({
+        success: true,
+        message: "API connection test successful",
+        data: response.data
+      });
+    } catch (error) {
+      console.error("API test failed:", error);
+      setTestResult({
+        success: false,
+        message: "API connection test failed",
+        error: error.message
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleHumanize = async () => {
     setError('');
@@ -176,23 +197,19 @@ const HumanizeText = () => {
       setDebugInfo(response.data);
       
       // Process the response data
-      if (response.data && response.data.success) {
-        // Backend should return humanizedContent directly 
-        if (response.data.humanizedContent) {
-          const processedText = sanitizeHtml(response.data.humanizedContent);
-          
-          // Check for HTML content or error pages
-          if (isErrorPage(processedText)) {
-            throw new Error('Received error page from server');
-          }
-          
-          setHumanizedText(processedText);
-          setOriginalText(response.data.originalContent || inputText);
-        } else {
-          throw new Error('Response missing humanized content');
+      if (response.data && response.data.success && response.data.humanizedContent) {
+        const processedText = sanitizeHtml(response.data.humanizedContent);
+        
+        // If the text is empty after sanitization, it's probably an error
+        if (!processedText) {
+          throw new Error('Received empty response from server');
         }
+        
+        setHumanizedText(processedText);
+        setOriginalText(response.data.originalContent || inputText);
       } else {
         // Unexpected response format
+        console.error('Invalid response format:', response.data);
         throw new Error('Invalid response format from server');
       }
     } catch (error) {
@@ -231,7 +248,22 @@ const HumanizeText = () => {
       
       <div className="tier-info">
         <p>Your account: <strong>{userTier}</strong> (Limit: {wordLimit} words)</p>
+        <button 
+          onClick={testApiConnection} 
+          disabled={loading}
+          className="test-button"
+        >
+          {loading ? 'Testing...' : 'Test API Connection'}
+        </button>
       </div>
+      
+      {testResult && (
+        <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
+          <p>{testResult.message}</p>
+          {testResult.success && <p>The API is responding correctly.</p>}
+          {!testResult.success && <p>Error: {testResult.error}</p>}
+        </div>
+      )}
       
       <div className="text-input-container">
         <label htmlFor="input-text">Enter text to humanize:</label>
