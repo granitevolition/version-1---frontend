@@ -12,12 +12,55 @@ function localHumanize(text) {
     return "I've improved this text to sound more natural and human-like.";
   }
 
-  // Break text into sentences
-  const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+  // Break text into sentences - preserving the punctuation
+  const sentencePattern = /([^.!?]+[.!?]+)/g;
+  const sentences = text.match(sentencePattern) || [text];
+  
   if (sentences.length === 0) return text;
 
-  // Simple transformations for frontend fallback
-  let result = text
+  // Copy sentences for modification
+  let resultSentences = [...sentences];
+  
+  // First-pass transformations: Add conversational elements
+  if (sentences.length > 0) {
+    // Transform the first sentence
+    const firstSentence = sentences[0].trim();
+    const firstSentenceStarters = [
+      "Picture this: ",
+      "Imagine a world where ",
+      "Let me tell you about ",
+      "Here's something fascinating: ",
+    ];
+    const starter = firstSentenceStarters[Math.floor(Math.random() * firstSentenceStarters.length)];
+    resultSentences[0] = starter + firstSentence.charAt(0).toLowerCase() + firstSentence.slice(1);
+    
+    // Transform the last sentence if there are multiple sentences
+    if (sentences.length > 1) {
+      const lastIndex = sentences.length - 1;
+      const lastSentence = sentences[lastIndex].trim();
+      const lastSentenceEnders = [
+        lastSentence + " Quite a captivating tale, isn't it?",
+        lastSentence + " I find that really intriguing.",
+        lastSentence + " That's the kind of story that captures your imagination."
+      ];
+      resultSentences[lastIndex] = lastSentenceEnders[Math.floor(Math.random() * lastSentenceEnders.length)];
+    }
+    
+    // Transform a middle sentence if there are at least 3 sentences
+    if (sentences.length >= 3) {
+      const midIndex = Math.floor(sentences.length / 2);
+      const midSentence = sentences[midIndex].trim();
+      const midSentenceTransformers = [
+        "I particularly enjoy how " + midSentence.charAt(0).toLowerCase() + midSentence.slice(1),
+        "What's fascinating is that " + midSentence.charAt(0).toLowerCase() + midSentence.slice(1),
+        "You know what's interesting? " + midSentence
+      ];
+      resultSentences[midIndex] = midSentenceTransformers[Math.floor(Math.random() * midSentenceTransformers.length)];
+    }
+  }
+
+  // Join sentences and apply contractions
+  let result = resultSentences.join(' ')
     .replace(/it is/g, "it's")
     .replace(/that is/g, "that's")
     .replace(/there is/g, "there's")
@@ -30,7 +73,7 @@ function localHumanize(text) {
     .replace(/nevertheless/g, "even so")
     .replace(/subsequently/g, "later");
   
-  return `I've made this text more conversational and human-like:\n\n${result}`;
+  return result;
 }
 
 /**
@@ -86,6 +129,40 @@ const isErrorPage = (text) => {
   );
 };
 
+/**
+ * Checks if humanized text is too similar to original
+ * @param {string} original - Original text
+ * @param {string} humanized - Humanized text
+ * @returns {boolean} - True if texts are too similar
+ */
+const isTooSimilar = (original, humanized) => {
+  if (!original || !humanized) return false;
+  
+  // If it starts with the marker phrase from our fallback, it's already processed
+  if (humanized.includes("I've made this text") || 
+      humanized.includes("Picture this") ||
+      humanized.includes("Imagine a world")) {
+    return false;
+  }
+  
+  // Remove all whitespace for comparison
+  const cleanOriginal = original.replace(/\s+/g, '');
+  const cleanHumanized = humanized.replace(/\s+/g, '');
+  
+  // If they're exactly the same, they're too similar
+  if (cleanOriginal === cleanHumanized) return true;
+  
+  // If they're more than 90% similar, they're too similar
+  const maxLength = Math.max(cleanOriginal.length, cleanHumanized.length);
+  let sameChars = 0;
+  
+  for (let i = 0; i < Math.min(cleanOriginal.length, cleanHumanized.length); i++) {
+    if (cleanOriginal[i] === cleanHumanized[i]) sameChars++;
+  }
+  
+  return (sameChars / maxLength) > 0.9;
+};
+
 const HumanizeText = () => {
   const [inputText, setInputText] = useState('');
   const [humanizedText, setHumanizedText] = useState('');
@@ -110,7 +187,8 @@ const HumanizeText = () => {
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json, text/plain'
-    }
+    },
+    timeout: 15000 // 15 second timeout
   });
 
   // Add authorization token to requests
@@ -236,6 +314,12 @@ const HumanizeText = () => {
         // Final check for error page content
         if (isErrorPage(processedText)) {
           console.warn('Detected error page in response, using fallback humanization');
+          processedText = localHumanize(inputText);
+        }
+        
+        // Check if the response is too similar to the original text
+        if (isTooSimilar(inputText, processedText)) {
+          console.warn('Response too similar to original text, using fallback humanization');
           processedText = localHumanize(inputText);
         }
         
