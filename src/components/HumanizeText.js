@@ -431,50 +431,15 @@ const HumanizeText = () => {
     try {
       console.log(`Sending request to ${processingMode === 'direct' ? 'directly process' : 'queue'} with content:`, inputText.substring(0, 50) + '...');
       
-      // Try multiple endpoints based on processing mode
-      let response;
-      const possibleEndpoints = processingMode === 'direct' 
-        ? [
-            '/api/v1/humanize/direct',   // New direct endpoint
-            '/humanize/direct',          // Without api/v1 prefix
-            '/api/v1/humanize/humanize', // Legacy endpoint
-            '/humanize/humanize',        // Legacy without prefix
-          ]
-        : [
-            '/api/v1/humanize/queue',    // Queue endpoint
-            '/humanize/queue',           // Without api/v1 prefix
-          ];
+      // NEW: Use the API proxy endpoint for humanization
+      const proxyEndpoint = '/api/proxy/humanize_text';
       
-      let lastError = null;
+      console.log(`Using API proxy endpoint: ${proxyEndpoint}`);
       
-      for (const endpoint of possibleEndpoints) {
-        try {
-          console.log(`Trying endpoint: ${endpoint}`);
-          response = await apiClient.post(endpoint, { 
-            content: inputText 
-          });
-          console.log(`Successfully called ${endpoint}`);
-          break; // Stop trying endpoints if one works
-        } catch (err) {
-          console.warn(`Failed to call ${endpoint}:`, err.message);
-          lastError = err;
-          // Continue to the next endpoint
-        }
-      }
-      
-      // If we still don't have a response after trying all endpoints
-      if (!response) {
-        // As a fallback, try the legacy endpoint
-        try {
-          console.log('Trying legacy endpoint as fallback');
-          response = await apiClient.post('/api/v1/humanize/humanize', { 
-            content: inputText 
-          });
-        } catch (err) {
-          console.warn('Legacy endpoint also failed:', err.message);
-          throw lastError || new Error('Failed to call any humanize endpoint');
-        }
-      }
+      // Make the request via the API proxy
+      const response = await apiClient.post(proxyEndpoint, { 
+        content: inputText 
+      });
       
       console.log('API Response:', response);
       console.log('API Response data:', response.data);
@@ -482,43 +447,17 @@ const HumanizeText = () => {
       // Save debug info for development
       setDebugInfo(response.data);
       
-      // Process the response data
-      if (response.data && response.data.success) {
-        // Direct processing response
-        if (response.data.humanizedContent) {
-          const content = response.data.humanizedContent;
-          
-          // Check if the returned content is HTML
-          if (isHtmlContent(content)) {
-            console.error('Server returned HTML instead of humanized text');
-            throw new Error('Server returned an HTML page. The humanization service may be temporarily unavailable.');
-          }
-          
-          // Save last used timestamp
-          localStorage.setItem('lastHumanized', Date.now().toString());
-          setLastUsed(new Date());
-          
-          setHumanizedText(content);
-          setOriginalText(response.data.originalContent || inputText);
-          setLoading(false);
-        }
-        // Queued request response
-        else if (response.data.requestId) {
-          setRequestId(response.data.requestId);
-          setRequestStatus(response.data.status);
-          
-          // Start polling for status
-          startPolling(response.data.requestId);
-          
-          // Update requests list
-          fetchUserRequests();
-        }
-        // No recognizable format
-        else {
-          throw new Error('Unexpected response format from server');
-        }
-      } else if (response.data && response.data.error) {
-        throw new Error(response.data.error || 'Error from server');
+      // Check if the response was successful
+      if (response.data) {
+        // Extract humanized content from response
+        const content = response.data.humanizedContent || response.data.humanized_text || response.data;
+        
+        // Save last used timestamp
+        localStorage.setItem('lastHumanized', Date.now().toString());
+        setLastUsed(new Date());
+        
+        setHumanizedText(content);
+        setLoading(false);
       } else {
         throw new Error('Unexpected response format from server');
       }
@@ -528,14 +467,7 @@ const HumanizeText = () => {
       setHumanizedText(''); // Clear any partial results
       setLoading(false);
       
-      // If there's a specific HTML detection
-      if (error.message && error.message.includes('HTML page')) {
-        setError(
-          'The external humanization service is currently unavailable. ' +
-          'This is likely a temporary issue with the service. ' +
-          'Please try again later or contact support if the problem persists.'
-        );
-      } else if (error.response) {
+      if (error.response) {
         console.error('Error response:', error.response.data);
         setDebugInfo(error.response.data);
         
