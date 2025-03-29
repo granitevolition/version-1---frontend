@@ -39,7 +39,6 @@ const HumanizeText = () => {
   const [debugInfo, setDebugInfo] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const [lastUsed, setLastUsed] = useState(null);
-  const [useDirect, setUseDirect] = useState(false);
 
   // Word limits by tier
   const WORD_LIMITS = {
@@ -147,54 +146,7 @@ const HumanizeText = () => {
     }
   };
 
-  const handleDirectHumanize = async () => {
-    setError('');
-    setHumanizedText('');
-    setOriginalText('');
-    setDebugInfo(null);
-    
-    if (!inputText.trim()) {
-      setError('Please enter some text to humanize');
-      return;
-    }
-    
-    setLoading(true);
-    setOriginalText(inputText); // Set original text first so it's always available
-    
-    try {
-      // Use direct endpoint that doesn't require authentication
-      const response = await apiClient.post('/api/v1/humanize/direct', { 
-        content: inputText 
-      });
-      
-      console.log('Direct API Response:', response.data);
-      setDebugInfo(response.data);
-      
-      if (response.data && response.data.humanizedContent) {
-        setHumanizedText(response.data.humanizedContent);
-        setOriginalText(response.data.originalContent || inputText);
-        localStorage.setItem('lastHumanized', Date.now().toString());
-        setLastUsed(new Date());
-      } else {
-        throw new Error('Invalid response format from direct endpoint');
-      }
-    } catch (error) {
-      console.error('Direct humanize error:', error);
-      setHumanizedText('');
-      setError(`Error: ${error.message || 'Unknown error occurred'}`);
-      if (error.response && error.response.data) {
-        setDebugInfo(error.response.data);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleHumanize = async () => {
-    if (useDirect) {
-      return handleDirectHumanize();
-    }
-    
     setError('');
     setHumanizedText('');
     setOriginalText('');
@@ -362,15 +314,6 @@ const HumanizeText = () => {
           >
             {loading ? 'Testing...' : 'Test API Connection'}
           </button>
-          
-          <label className="toggle-label">
-            <input 
-              type="checkbox" 
-              checked={useDirect} 
-              onChange={() => setUseDirect(!useDirect)} 
-            />
-            Use Direct Endpoint (Bypass Auth)
-          </label>
         </div>
       </div>
       
@@ -402,10 +345,10 @@ const HumanizeText = () => {
       
       <button 
         onClick={handleHumanize} 
-        disabled={loading || wordCount === 0 || (!useDirect && wordCount > wordLimit)}
+        disabled={loading || wordCount === 0 || wordCount > wordLimit}
         className="humanize-button"
       >
-        {loading ? 'Humanizing...' : (useDirect ? 'Humanize Text (Direct)' : 'Humanize Text')}
+        {loading ? 'Humanizing...' : 'Humanize Text'}
       </button>
       
       {humanizedText && (
@@ -444,8 +387,8 @@ const HumanizeText = () => {
         </div>
       )}
       
-      {/* Debug section - always visible for troubleshooting */}
-      {debugInfo && (
+      {/* Debug section - only visible during development */}
+      {debugInfo && process.env.NODE_ENV === 'development' && (
         <div className="debug-section">
           <h4>Debug Information:</h4>
           <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
