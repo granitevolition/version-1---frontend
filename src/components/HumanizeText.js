@@ -69,6 +69,9 @@ const HumanizeText = () => {
   const [userRequests, setUserRequests] = useState([]);
   const [showRequestsList, setShowRequestsList] = useState(false);
   
+  // Processing mode - 'direct' or 'queue' 
+  const [processingMode, setProcessingMode] = useState('direct');
+  
   // Polling reference
   const pollingRef = useRef(null);
 
@@ -426,16 +429,21 @@ const HumanizeText = () => {
     setOriginalText(inputText); // Set original text first so it's always available
     
     try {
-      console.log('Sending request to queue with content:', inputText.substring(0, 50) + '...');
+      console.log(`Sending request to ${processingMode === 'direct' ? 'directly process' : 'queue'} with content:`, inputText.substring(0, 50) + '...');
       
-      // Try multiple endpoints in case the app is deployed with different base paths
+      // Try multiple endpoints based on processing mode
       let response;
-      const possibleEndpoints = [
-        '/api/v1/humanize/queue',    // New queue endpoint
-        '/humanize/queue',           // Without api/v1 prefix
-        '/api/v1/humanize/humanize', // Legacy endpoint
-        '/humanize/humanize',        // Legacy without prefix
-      ];
+      const possibleEndpoints = processingMode === 'direct' 
+        ? [
+            '/api/v1/humanize/direct',   // New direct endpoint
+            '/humanize/direct',          // Without api/v1 prefix
+            '/api/v1/humanize/humanize', // Legacy endpoint
+            '/humanize/humanize',        // Legacy without prefix
+          ]
+        : [
+            '/api/v1/humanize/queue',    // Queue endpoint
+            '/humanize/queue',           // Without api/v1 prefix
+          ];
       
       let lastError = null;
       
@@ -456,7 +464,16 @@ const HumanizeText = () => {
       
       // If we still don't have a response after trying all endpoints
       if (!response) {
-        throw lastError || new Error('Failed to call any humanize endpoint');
+        // As a fallback, try the legacy endpoint
+        try {
+          console.log('Trying legacy endpoint as fallback');
+          response = await apiClient.post('/api/v1/humanize/humanize', { 
+            content: inputText 
+          });
+        } catch (err) {
+          console.warn('Legacy endpoint also failed:', err.message);
+          throw lastError || new Error('Failed to call any humanize endpoint');
+        }
       }
       
       console.log('API Response:', response);
@@ -467,19 +484,8 @@ const HumanizeText = () => {
       
       // Process the response data
       if (response.data && response.data.success) {
-        // Handle queued request
-        if (response.data.requestId) {
-          setRequestId(response.data.requestId);
-          setRequestStatus(response.data.status);
-          
-          // Start polling for status
-          startPolling(response.data.requestId);
-          
-          // Update requests list
-          fetchUserRequests();
-        }
-        // Handle legacy direct response (just in case)
-        else if (response.data.humanizedContent) {
+        // Direct processing response
+        if (response.data.humanizedContent) {
           const content = response.data.humanizedContent;
           
           // Check if the returned content is HTML
@@ -495,6 +501,17 @@ const HumanizeText = () => {
           setHumanizedText(content);
           setOriginalText(response.data.originalContent || inputText);
           setLoading(false);
+        }
+        // Queued request response
+        else if (response.data.requestId) {
+          setRequestId(response.data.requestId);
+          setRequestStatus(response.data.status);
+          
+          // Start polling for status
+          startPolling(response.data.requestId);
+          
+          // Update requests list
+          fetchUserRequests();
         }
         // No recognizable format
         else {
@@ -574,6 +591,19 @@ const HumanizeText = () => {
             {showRequestsList ? 'Hide History' : 'Show History'}
           </button>
         </div>
+      </div>
+      
+      <div className="mode-selector">
+        <label className="mode-toggle">
+          <input
+            type="checkbox"
+            checked={processingMode === 'queue'}
+            onChange={() => setProcessingMode(processingMode === 'direct' ? 'queue' : 'direct')}
+          />
+          <span className="mode-text">
+            {processingMode === 'direct' ? 'Direct Processing (Faster)' : 'Queue Processing (More Reliable)'}
+          </span>
+        </label>
       </div>
       
       {testResult && (
