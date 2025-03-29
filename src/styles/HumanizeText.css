@@ -192,6 +192,32 @@ button:disabled {
   background-color: #2980b9;
 }
 
+/* Mode selector styles */
+.mode-selector {
+  margin-bottom: 20px;
+  padding: 12px 15px;
+  background-color: #eaf2f8;
+  border-radius: 4px;
+  border: 1px solid #d6eaf8;
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 15px;
+  color: #34495e;
+}
+
+.mode-toggle input {
+  margin: 0;
+}
+
+.mode-text {
+  font-weight: 500;
+}
+
 .toggle-label {
   display: flex;
   align-items: center;
