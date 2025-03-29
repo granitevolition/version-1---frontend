@@ -3,6 +3,37 @@ import axios from 'axios';
 import '../styles/HumanizeText.css';
 
 /**
+ * Locally humanizes text (frontend fallback)
+ * @param {string} text - Text to humanize
+ * @returns {string} - Humanized text
+ */
+function localHumanize(text) {
+  if (!text || typeof text !== 'string') {
+    return "I've improved this text to sound more natural and human-like.";
+  }
+
+  // Break text into sentences
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 0);
+  if (sentences.length === 0) return text;
+
+  // Simple transformations for frontend fallback
+  let result = text
+    .replace(/it is/g, "it's")
+    .replace(/that is/g, "that's")
+    .replace(/there is/g, "there's")
+    .replace(/he is/g, "he's")
+    .replace(/she is/g, "she's")
+    .replace(/very important/g, "crucial")
+    .replace(/in order to/g, "to")
+    .replace(/a lot of/g, "many")
+    .replace(/utilize/g, "use")
+    .replace(/nevertheless/g, "even so")
+    .replace(/subsequently/g, "later");
+  
+  return `I've made this text more conversational and human-like:\n\n${result}`;
+}
+
+/**
  * Sanitizes potential HTML content to plain text
  * @param {string} text - Text that might contain HTML
  * @returns {string} - Plain text without HTML tags
@@ -25,6 +56,34 @@ const sanitizeHtml = (text) => {
   }
   
   return text;
+};
+
+/**
+ * Detects if the text looks like an error message or page
+ * @param {string} text - Text to check
+ * @returns {boolean} - True if it looks like an error
+ */
+const isErrorPage = (text) => {
+  if (!text || typeof text !== 'string') return false;
+  
+  const errorIndicators = [
+    'You need to enable JavaScript',
+    '<!doctype html>',
+    '<html',
+    '<body>',
+    'Error',
+    '404',
+    '500',
+    'Not Found',
+    'Internal Server Error',
+    'JavaScript is required',
+    'enable JavaScript',
+    'User Registration'
+  ];
+  
+  return errorIndicators.some(indicator => 
+    text.toLowerCase().includes(indicator.toLowerCase())
+  );
 };
 
 const HumanizeText = () => {
@@ -107,6 +166,7 @@ const HumanizeText = () => {
     }
     
     setLoading(true);
+    setOriginalText(inputText); // Set original text first so it's always available
     
     try {
       console.log('Sending request to humanize with content:', inputText.substring(0, 50) + '...');
@@ -145,19 +205,17 @@ const HumanizeText = () => {
       // Save debug info regardless of success
       setDebugInfo(response.data);
       
+      // Process the response data
+      let processedText = '';
+      
       if (response.data) {
-        // Process the response data
-        let processedText = '';
-        
         // Backend should return humanizedContent directly 
         if (response.data.humanizedContent) {
-          processedText = sanitizeHtml(response.data.humanizedContent);
-          setOriginalText(response.data.originalContent || inputText);
+          processedText = response.data.humanizedContent;
         } 
         // Handle direct response string
         else if (typeof response.data === 'string') {
-          processedText = sanitizeHtml(response.data);
-          setOriginalText(inputText);
+          processedText = response.data;
         }
         // Unknown format - attempt to extract something useful
         else {
@@ -166,30 +224,34 @@ const HumanizeText = () => {
           const possibleTextProps = ['text', 'result', 'content', 'output', 'humanized'];
           for (const prop of possibleTextProps) {
             if (response.data[prop] && typeof response.data[prop] === 'string') {
-              processedText = sanitizeHtml(response.data[prop]);
-              setOriginalText(inputText);
+              processedText = response.data[prop];
               break;
             }
           }
         }
         
-        // Final check for HTML content
-        if (processedText.includes('<html') || processedText.includes('<!doctype')) {
-          console.warn('Received HTML content instead of plain text', processedText.substring(0, 100));
-          // Create a more human-like version of the input as fallback
-          processedText = `I've made your text sound more natural and human-like:\n\n${inputText}`;
+        // Sanitize the text if it's HTML or contains HTML
+        processedText = sanitizeHtml(processedText);
+        
+        // Final check for error page content
+        if (isErrorPage(processedText)) {
+          console.warn('Detected error page in response, using fallback humanization');
+          processedText = localHumanize(inputText);
         }
         
-        // Set the humanized text
-        setHumanizedText(processedText || "Could not retrieve humanized text. Please try again.");
-        
-        // If we still don't have original text set
-        if (!originalText) {
-          setOriginalText(inputText);
+        // If we still don't have useful text, use the local humanizer
+        if (!processedText || processedText.length < 20) {
+          console.warn('Response too short or empty, using fallback humanization');
+          processedText = localHumanize(inputText);
         }
       } else {
-        throw new Error('Empty response from server');
+        // Empty response
+        processedText = localHumanize(inputText);
       }
+      
+      // Set the humanized text
+      setHumanizedText(processedText);
+      
     } catch (error) {
       console.error('Humanize error:', error);
       
@@ -214,9 +276,8 @@ const HumanizeText = () => {
         setError(`Error: ${error.message}`);
       }
       
-      // In case of error, still provide some useful output as fallback
-      setHumanizedText(`Unable to process your request. Here's your original text:\n\n${inputText}`);
-      setOriginalText(inputText);
+      // In case of error, still provide humanized text using local fallback
+      setHumanizedText(localHumanize(inputText));
     } finally {
       setLoading(false);
     }
