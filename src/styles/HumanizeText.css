@@ -146,6 +146,13 @@ button:disabled {
   font-size: 0.9em;
   color: #7f8c8d;
   font-style: italic;
+  margin-top: 5px !important;
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .test-button {
@@ -160,6 +167,19 @@ button:disabled {
 
 .test-button:hover {
   background-color: #8e44ad;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9em;
+  color: #34495e;
+  cursor: pointer;
+}
+
+.toggle-label input {
+  margin: 0;
 }
 
 .test-result {
@@ -275,11 +295,12 @@ button:disabled {
     align-items: flex-start;
   }
   
-  .tier-info .test-button {
+  .action-buttons {
     margin-top: 10px;
+    width: 100%;
   }
   
-  .humanize-button, .copy-button {
+  .test-button, .humanize-button, .copy-button {
     width: 100%;
     margin-bottom: 10px;
   }
