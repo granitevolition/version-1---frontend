@@ -38,6 +38,7 @@ const HumanizeText = () => {
   const [wordLimit, setWordLimit] = useState(500);
   const [debugInfo, setDebugInfo] = useState(null);
   const [testResult, setTestResult] = useState(null);
+  const [lastUsed, setLastUsed] = useState(null);
 
   // Word limits by tier
   const WORD_LIMITS = {
@@ -53,7 +54,7 @@ const HumanizeText = () => {
       'Content-Type': 'application/json',
       'Accept': 'application/json, text/plain'
     },
-    timeout: 20000 // 20 second timeout - longer to accommodate API delays
+    timeout: 60000 // 60 second timeout - much longer to accommodate API delays
   });
 
   // Add authorization token to requests
@@ -76,6 +77,12 @@ const HumanizeText = () => {
           // Set tier if available, otherwise use default
           setUserTier(user.tier || 'free');
           setWordLimit(WORD_LIMITS[user.tier] || WORD_LIMITS.free);
+        }
+        
+        // Get last used timestamp
+        const lastUsedTime = localStorage.getItem('lastHumanized');
+        if (lastUsedTime) {
+          setLastUsed(new Date(parseInt(lastUsedTime)));
         }
       } catch (error) {
         console.error('Error fetching user info:', error);
@@ -174,6 +181,7 @@ const HumanizeText = () => {
       
       for (const endpoint of possibleEndpoints) {
         try {
+          console.log(`Trying endpoint: ${endpoint}`);
           response = await apiClient.post(endpoint, { 
             content: inputText 
           });
@@ -191,26 +199,71 @@ const HumanizeText = () => {
         throw lastError || new Error('Failed to call any humanize endpoint');
       }
       
-      console.log('API Response:', response.data);
+      console.log('API Response:', response);
+      console.log('API Response data:', response.data);
       
       // Save debug info regardless of success
       setDebugInfo(response.data);
       
       // Process the response data
-      if (response.data && response.data.success && response.data.humanizedContent) {
-        const processedText = sanitizeHtml(response.data.humanizedContent);
-        
-        // If the text is empty after sanitization, it's probably an error
-        if (!processedText) {
-          throw new Error('Received empty response from server');
+      if (response.data) {
+        if (response.data.success && response.data.humanizedContent) {
+          // Success case - standard format
+          const processedText = sanitizeHtml(response.data.humanizedContent);
+          
+          // Save last used timestamp
+          localStorage.setItem('lastHumanized', Date.now().toString());
+          setLastUsed(new Date());
+          
+          // If the text is empty after sanitization, it's probably an error
+          if (!processedText) {
+            throw new Error('Received empty response from server');
+          }
+          
+          setHumanizedText(processedText);
+          setOriginalText(response.data.originalContent || inputText);
+        } else if (typeof response.data === 'string') {
+          // Direct string response
+          const processedText = sanitizeHtml(response.data);
+          
+          // Save last used timestamp
+          localStorage.setItem('lastHumanized', Date.now().toString());
+          setLastUsed(new Date());
+          
+          setHumanizedText(processedText);
+        } else {
+          // Try to extract humanized text from unknown format
+          let extractedText = null;
+          
+          if (response.data.text) {
+            extractedText = response.data.text;
+          } else if (response.data.humanized_text) {
+            extractedText = response.data.humanized_text;
+          } else if (response.data.result) {
+            extractedText = response.data.result;
+          } else if (response.data.output) {
+            extractedText = response.data.output;
+          } else if (response.data.content) {
+            extractedText = response.data.content;
+          }
+          
+          if (extractedText) {
+            const processedText = sanitizeHtml(extractedText);
+            
+            // Save last used timestamp
+            localStorage.setItem('lastHumanized', Date.now().toString());
+            setLastUsed(new Date());
+            
+            setHumanizedText(processedText);
+          } else {
+            // Unexpected response format
+            console.error('Invalid response format:', response.data);
+            throw new Error('Invalid response format from server');
+          }
         }
-        
-        setHumanizedText(processedText);
-        setOriginalText(response.data.originalContent || inputText);
       } else {
-        // Unexpected response format
-        console.error('Invalid response format:', response.data);
-        throw new Error('Invalid response format from server');
+        // Empty response
+        throw new Error('Empty response from server');
       }
     } catch (error) {
       console.error('Humanize error:', error);
@@ -248,6 +301,9 @@ const HumanizeText = () => {
       
       <div className="tier-info">
         <p>Your account: <strong>{userTier}</strong> (Limit: {wordLimit} words)</p>
+        {lastUsed && (
+          <p className="last-used">Last humanized: {lastUsed.toLocaleString()}</p>
+        )}
         <button 
           onClick={testApiConnection} 
           disabled={loading}
@@ -327,8 +383,8 @@ const HumanizeText = () => {
         </div>
       )}
       
-      {/* Debug section - only show in development */}
-      {debugInfo && process.env.NODE_ENV === 'development' && (
+      {/* Debug section - visible in all environments for troubleshooting */}
+      {debugInfo && (
         <div className="debug-section">
           <h4>Debug Information:</h4>
           <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
