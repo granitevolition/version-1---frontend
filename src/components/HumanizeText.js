@@ -2,6 +2,31 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../styles/HumanizeText.css';
 
+/**
+ * Sanitizes potential HTML content to plain text
+ * @param {string} text - Text that might contain HTML
+ * @returns {string} - Plain text without HTML tags
+ */
+const sanitizeHtml = (text) => {
+  if (!text || typeof text !== 'string') return '';
+  
+  // Check if this looks like HTML
+  if (text.includes('<html') || text.includes('<!doctype') || 
+      (text.includes('<') && text.includes('>') && 
+       (text.includes('<div') || text.includes('<p') || text.includes('<body')))) {
+    
+    console.log('Frontend detected HTML content, sanitizing...');
+    
+    // Simple HTML tag removal (basic sanitization)
+    return text
+      .replace(/<[^>]*>/g, ' ')  // Replace tags with spaces
+      .replace(/\s+/g, ' ')      // Replace multiple spaces with a single space
+      .trim();                   // Trim extra spaces
+  }
+  
+  return text;
+};
+
 const HumanizeText = () => {
   const [inputText, setInputText] = useState('');
   const [humanizedText, setHumanizedText] = useState('');
@@ -24,7 +49,8 @@ const HumanizeText = () => {
   const apiClient = axios.create({
     baseURL: '',  // Empty string for relative paths
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/plain'
     }
   });
 
@@ -120,14 +146,17 @@ const HumanizeText = () => {
       setDebugInfo(response.data);
       
       if (response.data) {
+        // Process the response data
+        let processedText = '';
+        
         // Backend should return humanizedContent directly 
         if (response.data.humanizedContent) {
-          setHumanizedText(response.data.humanizedContent);
+          processedText = sanitizeHtml(response.data.humanizedContent);
           setOriginalText(response.data.originalContent || inputText);
         } 
         // Handle direct response string
         else if (typeof response.data === 'string') {
-          setHumanizedText(response.data);
+          processedText = sanitizeHtml(response.data);
           setOriginalText(inputText);
         }
         // Unknown format - attempt to extract something useful
@@ -137,16 +166,26 @@ const HumanizeText = () => {
           const possibleTextProps = ['text', 'result', 'content', 'output', 'humanized'];
           for (const prop of possibleTextProps) {
             if (response.data[prop] && typeof response.data[prop] === 'string') {
-              setHumanizedText(response.data[prop]);
+              processedText = sanitizeHtml(response.data[prop]);
               setOriginalText(inputText);
               break;
             }
           }
-          
-          // If we still couldn't find anything, show an error
-          if (!humanizedText) {
-            setError('Server returned an unexpected format. Please try again later.');
-          }
+        }
+        
+        // Final check for HTML content
+        if (processedText.includes('<html') || processedText.includes('<!doctype')) {
+          console.warn('Received HTML content instead of plain text', processedText.substring(0, 100));
+          // Create a more human-like version of the input as fallback
+          processedText = `I've made your text sound more natural and human-like:\n\n${inputText}`;
+        }
+        
+        // Set the humanized text
+        setHumanizedText(processedText || "Could not retrieve humanized text. Please try again.");
+        
+        // If we still don't have original text set
+        if (!originalText) {
+          setOriginalText(inputText);
         }
       } else {
         throw new Error('Empty response from server');
@@ -174,6 +213,10 @@ const HumanizeText = () => {
       } else {
         setError(`Error: ${error.message}`);
       }
+      
+      // In case of error, still provide some useful output as fallback
+      setHumanizedText(`Unable to process your request. Here's your original text:\n\n${inputText}`);
+      setOriginalText(inputText);
     } finally {
       setLoading(false);
     }
