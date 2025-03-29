@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import '../styles/HumanizeText.css';
 
@@ -61,6 +61,16 @@ const HumanizeText = () => {
   const [debugInfo, setDebugInfo] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const [lastUsed, setLastUsed] = useState(null);
+  
+  // Queue-specific states
+  const [requestId, setRequestId] = useState(null);
+  const [requestStatus, setRequestStatus] = useState(null);
+  const [pollingInterval, setPollingInterval] = useState(null);
+  const [userRequests, setUserRequests] = useState([]);
+  const [showRequestsList, setShowRequestsList] = useState(false);
+  
+  // Polling reference
+  const pollingRef = useRef(null);
 
   // Word limits by tier
   const WORD_LIMITS = {
@@ -106,12 +116,22 @@ const HumanizeText = () => {
         if (lastUsedTime) {
           setLastUsed(new Date(parseInt(lastUsedTime)));
         }
+        
+        // Fetch user's recent requests
+        fetchUserRequests();
       } catch (error) {
         console.error('Error fetching user info:', error);
       }
     };
 
     fetchUserInfo();
+    
+    // Cleanup polling on unmount
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
   }, []);
 
   // Update word count as user types
@@ -158,12 +178,14 @@ const HumanizeText = () => {
 
       // If any of the API test approaches succeeded, show a message
       if (response.data && response.data.results) {
-        const successfulApproach = response.data.results.find(r => r.success && !r.isHtml);
+        const successfulApproach = Object.entries(response.data.results)
+          .find(([key, value]) => value.success && !value.containsHtml);
+        
         if (successfulApproach) {
           setTestResult(prev => ({
             ...prev,
-            successfulApproach: successfulApproach.attempt,
-            message: `API connection successful using "${successfulApproach.attempt}" approach`
+            successfulApproach: successfulApproach[0],
+            message: `API connection successful using "${successfulApproach[0]}" approach`
           }));
         }
       }
@@ -178,12 +200,216 @@ const HumanizeText = () => {
       setLoading(false);
     }
   };
+  
+  // Fetch user's recent requests
+  const fetchUserRequests = async () => {
+    try {
+      const possibleEndpoints = [
+        '/api/v1/humanize/requests',  // Standard API path
+        '/humanize/requests',         // Without api/v1 prefix
+      ];
+      
+      let response;
+      let lastError;
+      
+      for (const endpoint of possibleEndpoints) {
+        try {
+          response = await apiClient.get(`${endpoint}?limit=5`);
+          console.log(`Successfully fetched user requests from ${endpoint}`);
+          break;
+        } catch (err) {
+          console.warn(`Failed to fetch user requests from ${endpoint}:`, err.message);
+          lastError = err;
+        }
+      }
+      
+      if (!response) {
+        console.error('Failed to fetch user requests:', lastError);
+        return;
+      }
+      
+      if (response.data && response.data.success && response.data.requests) {
+        setUserRequests(response.data.requests);
+      }
+    } catch (error) {
+      console.error('Error fetching user requests:', error);
+    }
+  };
+  
+  // Check the status of a request
+  const checkRequestStatus = async (requestId) => {
+    try {
+      const possibleEndpoints = [
+        `/api/v1/humanize/status/${requestId}`,  // Standard API path
+        `/humanize/status/${requestId}`,         // Without api/v1 prefix
+      ];
+      
+      let response;
+      let lastError;
+      
+      for (const endpoint of possibleEndpoints) {
+        try {
+          response = await apiClient.get(endpoint);
+          console.log(`Successfully checked request status from ${endpoint}`);
+          break;
+        } catch (err) {
+          console.warn(`Failed to check request status from ${endpoint}:`, err.message);
+          lastError = err;
+        }
+      }
+      
+      if (!response) {
+        throw lastError || new Error('Failed to check request status');
+      }
+      
+      if (response.data && response.data.success !== false) {
+        setRequestStatus(response.data.status);
+        setDebugInfo(response.data);
+        
+        // If request is completed, show the result
+        if (response.data.status === 'completed' && response.data.humanizedText) {
+          setHumanizedText(response.data.humanizedText);
+          setOriginalText(response.data.originalText || originalText);
+          
+          // Stop polling
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          
+          // Save last used timestamp
+          localStorage.setItem('lastHumanized', Date.now().toString());
+          setLastUsed(new Date());
+          
+          // Update loading state
+          setLoading(false);
+        }
+        // If request failed, show error
+        else if (response.data.status === 'failed') {
+          setError(`Humanization failed: ${response.data.errorMessage || 'Unknown error'}`);
+          
+          // Stop polling
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          
+          // Update loading state
+          setLoading(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking request status:', error);
+      
+      // Stop polling on error
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      
+      setLoading(false);
+      setError(`Error checking status: ${error.message}`);
+    }
+  };
+  
+  // Start polling for request status
+  const startPolling = (requestId) => {
+    // Clean up any existing interval
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+    }
+    
+    // Set initial polling interval (2 seconds)
+    let pollInterval = 2000;
+    
+    // Start polling
+    pollingRef.current = setInterval(() => {
+      checkRequestStatus(requestId);
+      
+      // Increase polling interval over time (up to 10 seconds)
+      if (pollInterval < 10000) {
+        pollInterval += 1000;
+        clearInterval(pollingRef.current);
+        pollingRef.current = setInterval(() => {
+          checkRequestStatus(requestId);
+        }, pollInterval);
+      }
+    }, pollInterval);
+  };
+  
+  // Handle retry for failed requests
+  const handleRetry = async (requestId) => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const possibleEndpoints = [
+        `/api/v1/humanize/retry/${requestId}`,  // Standard API path
+        `/humanize/retry/${requestId}`,         // Without api/v1 prefix
+      ];
+      
+      let response;
+      let lastError;
+      
+      for (const endpoint of possibleEndpoints) {
+        try {
+          response = await apiClient.post(endpoint);
+          console.log(`Successfully queued retry from ${endpoint}`);
+          break;
+        } catch (err) {
+          console.warn(`Failed to queue retry from ${endpoint}:`, err.message);
+          lastError = err;
+        }
+      }
+      
+      if (!response) {
+        throw lastError || new Error('Failed to queue retry');
+      }
+      
+      if (response.data && response.data.success) {
+        setRequestId(response.data.requestId);
+        setRequestStatus(response.data.status);
+        
+        // Start polling for status updates
+        startPolling(response.data.requestId);
+        
+        // Update requests list
+        fetchUserRequests();
+      } else {
+        throw new Error(response.data.error || 'Failed to queue retry');
+      }
+    } catch (error) {
+      console.error('Error retrying request:', error);
+      setError(`Error retrying: ${error.message}`);
+      setLoading(false);
+    }
+  };
+  
+  // Handle using a previous request
+  const handleUseRequest = (request) => {
+    setRequestId(request.id);
+    setRequestStatus(request.status);
+    setOriginalText(request.original_text);
+    
+    if (request.status === 'completed' && request.humanized_text) {
+      setHumanizedText(request.humanized_text);
+      setLoading(false);
+    } else if (request.status === 'pending' || request.status === 'processing') {
+      setLoading(true);
+      startPolling(request.id);
+    } else if (request.status === 'failed') {
+      setError(`This request failed: ${request.error_message || 'Unknown error'}`);
+      setLoading(false);
+    }
+  };
 
   const handleHumanize = async () => {
     setError('');
     setHumanizedText('');
     setOriginalText('');
     setDebugInfo(null);
+    setRequestId(null);
+    setRequestStatus(null);
     
     if (!inputText.trim()) {
       setError('Please enter some text to humanize');
@@ -200,14 +426,15 @@ const HumanizeText = () => {
     setOriginalText(inputText); // Set original text first so it's always available
     
     try {
-      console.log('Sending request to humanize with content:', inputText.substring(0, 50) + '...');
+      console.log('Sending request to queue with content:', inputText.substring(0, 50) + '...');
       
       // Try multiple endpoints in case the app is deployed with different base paths
       let response;
       const possibleEndpoints = [
-        '/api/v1/humanize/humanize',  // Standard API path
-        '/humanize/humanize',         // Without api/v1 prefix
-        '/api/humanize',              // Alternative API path
+        '/api/v1/humanize/queue',    // New queue endpoint
+        '/humanize/queue',           // Without api/v1 prefix
+        '/api/v1/humanize/humanize', // Legacy endpoint
+        '/humanize/humanize',        // Legacy without prefix
       ];
       
       let lastError = null;
@@ -239,9 +466,20 @@ const HumanizeText = () => {
       setDebugInfo(response.data);
       
       // Process the response data
-      if (response.data) {
-        // Handle standard success case
-        if (response.data.success && response.data.humanizedContent) {
+      if (response.data && response.data.success) {
+        // Handle queued request
+        if (response.data.requestId) {
+          setRequestId(response.data.requestId);
+          setRequestStatus(response.data.status);
+          
+          // Start polling for status
+          startPolling(response.data.requestId);
+          
+          // Update requests list
+          fetchUserRequests();
+        }
+        // Handle legacy direct response (just in case)
+        else if (response.data.humanizedContent) {
           const content = response.data.humanizedContent;
           
           // Check if the returned content is HTML
@@ -256,72 +494,22 @@ const HumanizeText = () => {
           
           setHumanizedText(content);
           setOriginalText(response.data.originalContent || inputText);
+          setLoading(false);
         }
-        // Handle error response
-        else if (response.data.error) {
-          throw new Error(response.data.error || 'Error from server');
-        }
-        // Handle direct string response
-        else if (typeof response.data === 'string') {
-          const content = response.data;
-          
-          // Check if the returned content is HTML
-          if (isHtmlContent(content)) {
-            console.error('Server returned HTML instead of humanized text');
-            throw new Error('Server returned an HTML page. The humanization service may be temporarily unavailable.');
-          }
-          
-          // Save last used timestamp
-          localStorage.setItem('lastHumanized', Date.now().toString());
-          setLastUsed(new Date());
-          
-          setHumanizedText(content);
-        }
-        // Handle other formats
+        // No recognizable format
         else {
-          // Try to extract humanized text from different response formats
-          let extractedText = null;
-          
-          if (response.data.text) {
-            extractedText = response.data.text;
-          } else if (response.data.humanized_text) {
-            extractedText = response.data.humanized_text;
-          } else if (response.data.result) {
-            extractedText = response.data.result;
-          } else if (response.data.output) {
-            extractedText = response.data.output;
-          } else if (response.data.content) {
-            extractedText = response.data.content;
-          } else if (response.data.details) {
-            throw new Error(response.data.details || 'Unknown server error');
-          }
-          
-          if (extractedText) {
-            // Check if the extracted text is HTML
-            if (isHtmlContent(extractedText)) {
-              console.error('Server returned HTML instead of humanized text');
-              throw new Error('Server returned an HTML page. The humanization service may be temporarily unavailable.');
-            }
-            
-            // Save last used timestamp
-            localStorage.setItem('lastHumanized', Date.now().toString());
-            setLastUsed(new Date());
-            
-            setHumanizedText(extractedText);
-          } else {
-            // Unexpected response format
-            console.error('Invalid response format:', response.data);
-            throw new Error('Server returned an unexpected response format');
-          }
+          throw new Error('Unexpected response format from server');
         }
+      } else if (response.data && response.data.error) {
+        throw new Error(response.data.error || 'Error from server');
       } else {
-        // Empty response
-        throw new Error('Empty response from server');
+        throw new Error('Unexpected response format from server');
       }
     } catch (error) {
       console.error('Humanize error:', error);
       
       setHumanizedText(''); // Clear any partial results
+      setLoading(false);
       
       // If there's a specific HTML detection
       if (error.message && error.message.includes('HTML page')) {
@@ -352,8 +540,6 @@ const HumanizeText = () => {
       } else {
         setError(`Error: ${error.message || 'Unknown error occurred'}`);
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -376,6 +562,17 @@ const HumanizeText = () => {
           >
             {loading ? 'Testing...' : 'Test API Connection'}
           </button>
+          <button
+            onClick={() => {
+              setShowRequestsList(!showRequestsList);
+              if (!showRequestsList) {
+                fetchUserRequests();
+              }
+            }}
+            className="history-button"
+          >
+            {showRequestsList ? 'Hide History' : 'Show History'}
+          </button>
         </div>
       </div>
       
@@ -391,6 +588,59 @@ const HumanizeText = () => {
             </>
           )}
           {!testResult.success && <p>Error: {testResult.error}</p>}
+        </div>
+      )}
+      
+      {/* Request History */}
+      {showRequestsList && userRequests.length > 0 && (
+        <div className="requests-list">
+          <h3>Recent Requests</h3>
+          <table className="requests-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Words</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {userRequests.map(request => (
+                <tr 
+                  key={request.id}
+                  className={request.id === requestId ? 'active-request' : ''}
+                >
+                  <td>{request.id}</td>
+                  <td>
+                    <span className={`status status-${request.status}`}>
+                      {request.status}
+                    </span>
+                  </td>
+                  <td>{request.word_count}</td>
+                  <td>{new Date(request.created_at).toLocaleString()}</td>
+                  <td>
+                    <button 
+                      onClick={() => handleUseRequest(request)}
+                      className="use-button"
+                      disabled={loading}
+                    >
+                      Use
+                    </button>
+                    {request.status === 'failed' && (
+                      <button 
+                        onClick={() => handleRetry(request.id)}
+                        className="retry-button"
+                        disabled={loading}
+                      >
+                        Retry
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
       
@@ -422,12 +672,40 @@ const HumanizeText = () => {
         </div>
       )}
       
+      {/* Request Status Section */}
+      {requestId && requestStatus && (
+        <div className={`request-status status-${requestStatus}`}>
+          <p>
+            <strong>Request ID:</strong> {requestId} | 
+            <strong>Status:</strong> {requestStatus}
+          </p>
+          {(requestStatus === 'pending' || requestStatus === 'processing') && (
+            <div className="status-message">
+              <p>Your request is being processed. This may take a few moments...</p>
+              <div className="loading-spinner"></div>
+            </div>
+          )}
+          {requestStatus === 'failed' && (
+            <div className="status-message">
+              <p>Your request failed to process. You can try again.</p>
+              <button 
+                onClick={() => handleRetry(requestId)}
+                className="retry-button"
+                disabled={loading}
+              >
+                Retry Request
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      
       <button 
         onClick={handleHumanize} 
         disabled={loading || wordCount === 0 || wordCount > wordLimit}
         className="humanize-button"
       >
-        {loading ? 'Humanizing...' : 'Humanize Text'}
+        {loading ? 'Processing...' : 'Humanize Text'}
       </button>
       
       {humanizedText && (
