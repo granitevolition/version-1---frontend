@@ -22,7 +22,7 @@ const HumanizeText = () => {
 
   // Configure axios with auth header
   const apiClient = axios.create({
-    baseURL: '/api/v1',
+    baseURL: '',  // Empty string for relative paths
     headers: {
       'Content-Type': 'application/json'
     }
@@ -83,41 +83,97 @@ const HumanizeText = () => {
     setLoading(true);
     
     try {
-      // Call our backend endpoint with 'content' parameter as it expects
-      const response = await apiClient.post('/humanize/humanize', { 
-        content: inputText 
-      });
+      console.log('Sending request to humanize with content:', inputText.substring(0, 50) + '...');
+      
+      // Try multiple endpoints in case the app is deployed with different base paths
+      let response;
+      const possibleEndpoints = [
+        '/api/v1/humanize/humanize',  // Standard API path
+        '/humanize/humanize',         // Without api/v1 prefix
+        '/api/humanize',              // Alternative API path
+      ];
+      
+      let lastError = null;
+      
+      for (const endpoint of possibleEndpoints) {
+        try {
+          response = await apiClient.post(endpoint, { 
+            content: inputText 
+          });
+          console.log(`Successfully called ${endpoint}`);
+          break; // Stop trying endpoints if one works
+        } catch (err) {
+          console.warn(`Failed to call ${endpoint}:`, err.message);
+          lastError = err;
+          // Continue to the next endpoint
+        }
+      }
+      
+      // If we still don't have a response after trying all endpoints
+      if (!response) {
+        throw lastError || new Error('Failed to call any humanize endpoint');
+      }
       
       console.log('API Response:', response.data);
       
-      if (response.data && response.data.success) {
-        // Backend is returning humanizedContent and originalContent
-        setHumanizedText(response.data.humanizedContent);
-        setOriginalText(response.data.originalContent);
-        
-        // Save debug info for development
-        setDebugInfo(response.data);
+      // Save debug info regardless of success
+      setDebugInfo(response.data);
+      
+      if (response.data) {
+        // Backend should return humanizedContent directly 
+        if (response.data.humanizedContent) {
+          setHumanizedText(response.data.humanizedContent);
+          setOriginalText(response.data.originalContent || inputText);
+        } 
+        // Handle direct response string
+        else if (typeof response.data === 'string') {
+          setHumanizedText(response.data);
+          setOriginalText(inputText);
+        }
+        // Unknown format - attempt to extract something useful
+        else {
+          console.warn('Unexpected response format:', response.data);
+          // Try to extract text from any property that might contain it
+          const possibleTextProps = ['text', 'result', 'content', 'output', 'humanized'];
+          for (const prop of possibleTextProps) {
+            if (response.data[prop] && typeof response.data[prop] === 'string') {
+              setHumanizedText(response.data[prop]);
+              setOriginalText(inputText);
+              break;
+            }
+          }
+          
+          // If we still couldn't find anything, show an error
+          if (!humanizedText) {
+            setError('Server returned an unexpected format. Please try again later.');
+          }
+        }
       } else {
-        setError('Invalid response format from server');
-        setDebugInfo(response.data);
+        throw new Error('Empty response from server');
       }
     } catch (error) {
       console.error('Humanize error:', error);
       
-      if (error.response && error.response.status === 401) {
-        setError('Authentication required. Please log in again.');
-        // Optionally redirect to login
-        // window.location.href = '/login';
-      } else if (error.response && error.response.data && error.response.data.error) {
-        setError(error.response.data.error);
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+        setDebugInfo(error.response.data);
+        
+        if (error.response.status === 401) {
+          setError('Authentication required. Please log in again.');
+          // Optionally redirect to login
+          // window.location.href = '/login';
+        } else if (error.response.status === 403) {
+          setError('You do not have permission to use this feature.');
+        } else if (error.response.data && error.response.data.error) {
+          setError(error.response.data.error);
+        } else {
+          setError(`Server error (${error.response.status}). Please try again later.`);
+        }
       } else if (error.request) {
-        setError('No response received from server. Please try again later.');
+        setError('No response received from server. Please check your internet connection.');
       } else {
         setError(`Error: ${error.message}`);
       }
-      
-      // Save error info for debugging
-      setDebugInfo(error.response?.data || error.message);
     } finally {
       setLoading(false);
     }
