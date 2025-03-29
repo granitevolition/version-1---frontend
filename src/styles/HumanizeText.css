@@ -166,11 +166,11 @@ button:disabled {
 
 .action-buttons {
   display: flex;
-  flex-direction: column;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.test-button {
+.test-button, .history-button {
   background-color: #9b59b6;
   color: white;
   border: none;
@@ -182,6 +182,14 @@ button:disabled {
 
 .test-button:hover {
   background-color: #8e44ad;
+}
+
+.history-button {
+  background-color: #3498db;
+}
+
+.history-button:hover {
+  background-color: #2980b9;
 }
 
 .toggle-label {
@@ -229,6 +237,168 @@ button:disabled {
   padding: 8px;
   border-radius: 4px;
   margin-top: 8px;
+}
+
+/* Request status styles */
+.request-status {
+  margin-bottom: 20px;
+  padding: 15px;
+  border-radius: 6px;
+  background-color: #f5f5f5;
+  border-left: 4px solid #3498db;
+}
+
+.request-status p {
+  margin: 0 0 8px 0;
+}
+
+.request-status p:last-child {
+  margin-bottom: 0;
+}
+
+.request-status.status-pending {
+  border-left-color: #f39c12;
+  background-color: #fef9e7;
+}
+
+.request-status.status-processing {
+  border-left-color: #3498db;
+  background-color: #ebf5fb;
+}
+
+.request-status.status-completed {
+  border-left-color: #2ecc71;
+  background-color: #e9f7ef;
+}
+
+.request-status.status-failed {
+  border-left-color: #e74c3c;
+  background-color: #fdedec;
+}
+
+.status-message {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.loading-spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.retry-button {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.retry-button:hover {
+  background-color: #c0392b;
+}
+
+/* Request history styles */
+.requests-list {
+  margin-bottom: 30px;
+  padding: 20px;
+  border-radius: 8px;
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+}
+
+.requests-list h3 {
+  margin-top: 0;
+  color: #2c3e50;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.requests-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.requests-table th, .requests-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.requests-table th {
+  background-color: #f1f1f1;
+  font-weight: bold;
+  color: #333;
+}
+
+.requests-table tr:hover {
+  background-color: #f9f9f9;
+}
+
+.requests-table .status {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.requests-table .status-pending {
+  background-color: #fef9e7;
+  color: #f39c12;
+}
+
+.requests-table .status-processing {
+  background-color: #ebf5fb;
+  color: #3498db;
+}
+
+.requests-table .status-completed {
+  background-color: #e9f7ef;
+  color: #2ecc71;
+}
+
+.requests-table .status-failed {
+  background-color: #fdedec;
+  color: #e74c3c;
+}
+
+.active-request {
+  background-color: #eaf2f8 !important;
+  border-left: 3px solid #3498db;
+}
+
+.use-button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-right: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.3s;
+}
+
+.use-button:hover {
+  background-color: #2980b9;
 }
 
 /* Styles for comparison view */
@@ -364,8 +534,21 @@ button:disabled {
     width: 100%;
   }
   
-  .test-button, .humanize-button, .copy-button {
+  .test-button, .humanize-button, .copy-button, .history-button {
     width: 100%;
     margin-bottom: 10px;
+  }
+  
+  .requests-table {
+    font-size: 12px;
+  }
+  
+  .requests-table th, .requests-table td {
+    padding: 6px;
+  }
+  
+  .use-button, .retry-button {
+    padding: 3px 6px;
+    font-size: 11px;
   }
 }
