@@ -93,6 +93,18 @@ const Dashboard = () => {
                 Use AI Detector
               </button>
             </div>
+            
+            <div className="feature-item">
+              <h3>Humanize Text</h3>
+              <p>Make AI-generated text sound more natural and human-written.</p>
+              <button 
+                onClick={() => navigate('/humanize')} 
+                className="primary-button"
+                disabled={!serverStatus.api}
+              >
+                Humanize Text
+              </button>
+            </div>
           </div>
         </div>
         
@@ -101,6 +113,7 @@ const Dashboard = () => {
           <h2>Tips for Better Results</h2>
           <ul className="tips-list">
             <li>Use the AI Detector for analyzing suspicious content</li>
+            <li>Use the Humanize Text tool to improve AI-generated content</li>
             <li>For best results, use text between 100-1000 words</li>
             <li>The AI detection is not 100% accurate and should be used as a guide</li>
             <li>Keep your account secure by logging out when not in use</li>
