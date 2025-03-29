@@ -3,6 +3,28 @@ import axios from 'axios';
 import '../styles/HumanizeText.css';
 
 /**
+ * Checks if content appears to be HTML
+ * @param {string} text - Text to check
+ * @returns {boolean} - True if it looks like HTML
+ */
+const isHtmlContent = (text) => {
+  if (!text || typeof text !== 'string') return false;
+  
+  // Check for common HTML indicators
+  const htmlIndicators = [
+    '<html', '</html>',
+    '<!doctype', '<!DOCTYPE',
+    '<body', '</body>',
+    '<div', '<p>',
+    'User Registration',
+    'enable JavaScript',
+    '<script', '</script>'
+  ];
+  
+  return htmlIndicators.some(indicator => text.includes(indicator));
+};
+
+/**
  * Sanitizes potential HTML content to plain text
  * @param {string} text - Text that might contain HTML
  * @returns {string} - Plain text without HTML tags
@@ -202,37 +224,51 @@ const HumanizeText = () => {
       console.log('API Response:', response);
       console.log('API Response data:', response.data);
       
-      // Save debug info regardless of success
+      // Save debug info for development
       setDebugInfo(response.data);
       
       // Process the response data
       if (response.data) {
+        // Handle standard success case
         if (response.data.success && response.data.humanizedContent) {
-          // Success case - standard format
-          const processedText = sanitizeHtml(response.data.humanizedContent);
+          const content = response.data.humanizedContent;
           
-          // Save last used timestamp
-          localStorage.setItem('lastHumanized', Date.now().toString());
-          setLastUsed(new Date());
-          
-          // If the text is empty after sanitization, it's probably an error
-          if (!processedText) {
-            throw new Error('Received empty response from server');
+          // Check if the returned content is HTML
+          if (isHtmlContent(content)) {
+            console.error('Server returned HTML instead of humanized text');
+            throw new Error('Server returned an HTML page. The humanization service may be temporarily unavailable.');
           }
           
-          setHumanizedText(processedText);
+          // Save last used timestamp
+          localStorage.setItem('lastHumanized', Date.now().toString());
+          setLastUsed(new Date());
+          
+          setHumanizedText(content);
           setOriginalText(response.data.originalContent || inputText);
-        } else if (typeof response.data === 'string') {
-          // Direct string response
-          const processedText = sanitizeHtml(response.data);
+        }
+        // Handle error response
+        else if (response.data.error) {
+          throw new Error(response.data.error || 'Error from server');
+        }
+        // Handle direct string response
+        else if (typeof response.data === 'string') {
+          const content = response.data;
+          
+          // Check if the returned content is HTML
+          if (isHtmlContent(content)) {
+            console.error('Server returned HTML instead of humanized text');
+            throw new Error('Server returned an HTML page. The humanization service may be temporarily unavailable.');
+          }
           
           // Save last used timestamp
           localStorage.setItem('lastHumanized', Date.now().toString());
           setLastUsed(new Date());
           
-          setHumanizedText(processedText);
-        } else {
-          // Try to extract humanized text from unknown format
+          setHumanizedText(content);
+        }
+        // Handle other formats
+        else {
+          // Try to extract humanized text from different response formats
           let extractedText = null;
           
           if (response.data.text) {
@@ -245,20 +281,26 @@ const HumanizeText = () => {
             extractedText = response.data.output;
           } else if (response.data.content) {
             extractedText = response.data.content;
+          } else if (response.data.details) {
+            throw new Error(response.data.details || 'Unknown server error');
           }
           
           if (extractedText) {
-            const processedText = sanitizeHtml(extractedText);
+            // Check if the extracted text is HTML
+            if (isHtmlContent(extractedText)) {
+              console.error('Server returned HTML instead of humanized text');
+              throw new Error('Server returned an HTML page. The humanization service may be temporarily unavailable.');
+            }
             
             // Save last used timestamp
             localStorage.setItem('lastHumanized', Date.now().toString());
             setLastUsed(new Date());
             
-            setHumanizedText(processedText);
+            setHumanizedText(extractedText);
           } else {
             // Unexpected response format
             console.error('Invalid response format:', response.data);
-            throw new Error('Invalid response format from server');
+            throw new Error('Server returned an unexpected response format');
           }
         }
       } else {
@@ -282,6 +324,8 @@ const HumanizeText = () => {
           setError('Humanization service is temporarily unavailable. Please try again later.');
         } else if (error.response.data && error.response.data.error) {
           setError(error.response.data.error);
+        } else if (error.response.data && error.response.data.details) {
+          setError(error.response.data.details);
         } else {
           setError(`Server error (${error.response.status}). Please try again later.`);
         }
