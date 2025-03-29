@@ -4,6 +4,7 @@ import RegistrationForm from './components/RegistrationForm';
 import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
 import AiDetector from './components/AiDetector';
+import HumanizeText from './components/HumanizeText';
 import TestConnectivity from './components/TestConnectivity';
 import './styles/App.css';
 
@@ -21,6 +22,7 @@ function App() {
             <Route path="/login" element={<LoginForm />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/ai-detector" element={<AiDetector />} />
+            <Route path="/humanize" element={<HumanizeText />} />
             <Route path="/test-connectivity" element={<TestConnectivity />} />
           </Routes>
         </main>
