@@ -5,6 +5,7 @@ import '../styles/HumanizeText.css';
 const HumanizeText = () => {
   const [inputText, setInputText] = useState('');
   const [humanizedText, setHumanizedText] = useState('');
+  const [originalText, setOriginalText] = useState('');
   const [wordCount, setWordCount] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,6 +44,7 @@ const HumanizeText = () => {
   const handleHumanize = async () => {
     setError('');
     setHumanizedText('');
+    setOriginalText('');
     
     if (!inputText.trim()) {
       setError('Please enter some text to humanize');
@@ -58,9 +60,19 @@ const HumanizeText = () => {
     setLoading(true);
     
     try {
-      const response = await axios.post('/api/humanize', { text: inputText });
-      setHumanizedText(response.data.humanizedText);
+      // Match the backend's expected parameter name (content instead of text)
+      const response = await axios.post('/api/v1/humanize/humanize', { content: inputText });
+      
+      // Check if the response has the expected structure
+      if (response.data && response.data.humanizedContent) {
+        setHumanizedText(response.data.humanizedContent);
+        setOriginalText(response.data.originalContent);
+      } else {
+        console.error('Unexpected response format:', response.data);
+        setError('Received unexpected response format from server');
+      }
     } catch (error) {
+      console.error('Humanize error:', error);
       if (error.response && error.response.data && error.response.data.error) {
         setError(error.response.data.error);
       } else {
@@ -117,6 +129,27 @@ const HumanizeText = () => {
           >
             Copy to Clipboard
           </button>
+        </div>
+      )}
+
+      {/* Add a comparison view */}
+      {originalText && humanizedText && (
+        <div className="comparison-container">
+          <h3>Compare Results:</h3>
+          <div className="comparison-grid">
+            <div className="comparison-column">
+              <h4>Original Text:</h4>
+              <div className="original-text">
+                {originalText}
+              </div>
+            </div>
+            <div className="comparison-column">
+              <h4>Humanized Text:</h4>
+              <div className="humanized-text">
+                {humanizedText}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
