@@ -11,6 +11,7 @@ const HumanizeText = () => {
   const [loading, setLoading] = useState(false);
   const [userTier, setUserTier] = useState('free');
   const [wordLimit, setWordLimit] = useState(500);
+  const [apiResponse, setApiResponse] = useState(null);
 
   // Word limits by tier
   const WORD_LIMITS = {
@@ -19,14 +20,35 @@ const HumanizeText = () => {
     'premium': 12500
   };
 
+  // Configure axios with base URL and auth headers
+  const apiClient = axios.create({
+    baseURL: process.env.REACT_APP_API_URL || '', // Use empty string as fallback for relative paths
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  // Add request interceptor to include auth token
+  apiClient.interceptors.request.use(config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+
   // Fetch user info on component mount
   useEffect(() => {
     const fetchUserInfo = async () => {
       try {
-        const response = await axios.get('/api/user/profile');
-        const tier = response.data.tier || 'free';
-        setUserTier(tier);
-        setWordLimit(WORD_LIMITS[tier] || WORD_LIMITS.free);
+        // Try to get user info from local storage first
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          const user = JSON.parse(userData);
+          // Set tier if available, otherwise use default
+          setUserTier(user.tier || 'free');
+          setWordLimit(WORD_LIMITS[user.tier] || WORD_LIMITS.free);
+        }
       } catch (error) {
         console.error('Error fetching user info:', error);
       }
@@ -45,6 +67,7 @@ const HumanizeText = () => {
     setError('');
     setHumanizedText('');
     setOriginalText('');
+    setApiResponse(null);
     
     if (!inputText.trim()) {
       setError('Please enter some text to humanize');
@@ -60,23 +83,45 @@ const HumanizeText = () => {
     setLoading(true);
     
     try {
-      // Match the backend's expected parameter name (content instead of text)
-      const response = await axios.post('/api/v1/humanize/humanize', { content: inputText });
+      // Direct API call to the external humanizing service
+      const response = await axios.post('https://web-production-3db6c.up.railway.app/humanize_text', {
+        text: inputText
+      });
       
-      // Check if the response has the expected structure
-      if (response.data && response.data.humanizedContent) {
-        setHumanizedText(response.data.humanizedContent);
-        setOriginalText(response.data.originalContent);
+      console.log('API Response:', response);
+      setApiResponse(response.data);
+      
+      // Check if the response has expected structure based on external API
+      if (response.data) {
+        if (typeof response.data === 'string') {
+          // If response is just a string, use it directly
+          setHumanizedText(response.data);
+          setOriginalText(inputText);
+        } else if (response.data.humanized_text) {
+          // If response has humanized_text property
+          setHumanizedText(response.data.humanized_text);
+          setOriginalText(inputText);
+        } else if (response.data.result) {
+          // Alternative response format
+          setHumanizedText(response.data.result);
+          setOriginalText(inputText);
+        } else {
+          // Unknown format but we have data, just display it
+          setHumanizedText(JSON.stringify(response.data));
+          setOriginalText(inputText);
+        }
       } else {
-        console.error('Unexpected response format:', response.data);
-        setError('Received unexpected response format from server');
+        throw new Error('Empty response received');
       }
     } catch (error) {
       console.error('Humanize error:', error);
-      if (error.response && error.response.data && error.response.data.error) {
-        setError(error.response.data.error);
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+        setError(`Server error: ${error.response.status} - ${error.response.data.error || 'Unknown error'}`);
+      } else if (error.request) {
+        setError('No response received from server. Please check your internet connection.');
       } else {
-        setError('Failed to humanize text. Please try again later.');
+        setError(`Error: ${error.message}`);
       }
     } finally {
       setLoading(false);
@@ -150,6 +195,14 @@ const HumanizeText = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+      
+      {/* Debug section for development */}
+      {apiResponse && process.env.NODE_ENV === 'development' && (
+        <div className="debug-section">
+          <h4>API Response (Debug):</h4>
+          <pre>{JSON.stringify(apiResponse, null, 2)}</pre>
         </div>
       )}
     </div>
